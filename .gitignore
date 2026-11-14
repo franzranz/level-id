@@ -1,0 +1,4 @@
+.build/
+.buildenv
+.DS_Store
+*.dmg

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="UTF-8"?>
+
+<presets>
+  <preset company="audient ltd" product="id14-mkii" schema-version="0.1.0"
+          software-version="4.4.2">
+    <device>
+      <mixer>
+        <input channel="0" mode="0" name="Mic 1" cut="0" gain-boost="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.51"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="6.00" pan="0.50"/>
+        </input>
+        <input channel="1" mode="0" name="Mic 2" cut="0" gain-boost="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="2" mode="0" name="Digi 1" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="3" mode="0" name="Digi 2" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="4" mode="0" name="Digi 3" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="5" mode="0" name="Digi 4" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="6" mode="0" name="Digi 5" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="7" mode="0" name="Digi 6" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="8" mode="0" name="Digi 7" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="9" mode="0" name="Digi 8" cut="0" polarity="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="10" mode="1" name="Computer" cut="0">
+          <mix index="0" volume="-0.60" pan="0.00"/>
+          <mix index="1" volume="-7.50" pan="0.00"/>
+          <mix index="2" volume="-0.60" pan="0.00"/>
+        </input>
+        <input channel="11" mode="2" name="DAW 2" cut="0">
+          <mix index="0" volume="-0.60" pan="1.00"/>
+          <mix index="1" volume="-7.50" pan="1.00"/>
+          <mix index="2" volume="-0.60" pan="1.00"/>
+        </input>
+        <input channel="12" mode="1" name="DAW 3+4" cut="0">
+          <mix index="0" volume="-128.00" pan="0.00"/>
+          <mix index="1" volume="-128.00" pan="0.00"/>
+          <mix index="2" volume="-128.00" pan="0.00"/>
+        </input>
+        <input channel="13" mode="2" name="DAW 4" cut="0">
+          <mix index="0" volume="-128.00" pan="1.00"/>
+          <mix index="1" volume="-128.00" pan="1.00"/>
+          <mix index="2" volume="-128.00" pan="1.00"/>
+        </input>
+        <input channel="14" mode="0" name="DAW 5" cut="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="-128.00" pan="0.50"/>
+          <mix index="2" volume="-128.00" pan="0.50"/>
+        </input>
+        <input channel="15" mode="3" name="DAW 6" cut="0">
+          <mix index="0" volume="-128.00" pan="0.50"/>
+          <mix index="1" volume="0.00" pan="0.50"/>
+          <mix index="2" volume="0.00" pan="0.50"/>
+        </input>
+        <output channel="0" name="Monitor"/>
+        <output channel="1" name="MASTER MIX"/>
+        <output channel="2" volume="0.00" name="Headphones"/>
+        <output channel="3" volume="0.00" name="CUE A"/>
+        <output channel="4" volume="0.00" name="CUE B"/>
+        <output channel="5" volume="0.00" name="CUE B"/>
+        <monitor-controller cut="0" dim="0" dim-attenuation="-46.00" active-monitor-output="0"
+                            talkback-input="15" alt-monitor-trim="0.00" mono-mode="0" headphone-cut="0">
+          <DEVICESETUP deviceType="CoreAudio" audioOutputDeviceName="" audioInputDeviceName="Built-in Microphone"
+                       audioDeviceRate="48000.0" audioDeviceInChans="1"/>
+          <function-key id="0" mode="-1"/>
+        </monitor-controller>
+      </mixer>
+      <system optical-input-mode="adat" preferred-clock="internal">
+        <routing id="0" index="0" mode="stereo" source="main-speakers"/>
+        <routing id="2" index="1" mode="stereo" source="alt-speakers"/>
+        <routing id="4" index="2" mode="stereo" source="cuea"/>
+      </system>
+      <routing>
+        <loop-back type="0" index="0"/>
+      </routing>
+    </device>
+    <gui gui-type="modern" show-product-reg="0">
+      <windows>
+        <window id="1" window-open="0">
+          <state window-pos-x="986" window-pos-y="612" window-width="960" window-height="667"/>
+        </window>
+        <window id="0" window-open="1">
+          <state analogue-inputs-visible="1" digital-inputs-visible="0" daw-inputs-visible="1"
+                 input-controls-visible="0" window-pos-x="828" window-pos-y="225"
+                 window-width="1120" window-height="919"/>
+        </window>
+      </windows>
+    </gui>
+  </preset>
+</presets>
