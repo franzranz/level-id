@@ -59,6 +59,16 @@ The iD14 is a USB Audio Class 2 device. All controls are UAC2 class requests on 
 
 Level iD only sends control commands that Audient's own iD app also sends. It never touches the firmware.
 
+## Help wanted
+
+This is a small hobby project and I would love some help. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
+
+- **Feedback.** Does it work for you? Is something confusing, missing, or annoying? Open an [issue](../../issues), every report helps.
+- **Other Audient interfaces.** If you own an iD4, iD22, iD24 or iD44, you are welcome to try this and help extend support. The protocol notes are in [docs/PROTOCOL.md](docs/PROTOCOL.md), and the read-only `id14ctl` tool (`./build.sh probe`) shows what a device reports. Other models are not supported yet, and I cannot test them myself.
+- **Testing on other setups.** Different Macs, macOS versions, light mode, several displays, sleep and wake, unusual cabling.
+- **Open questions about the iD14 MkII.** Is the +10 dB boost on input 1 controllable over USB? Which routing code switches loopback on? Does a newer firmware behave differently?
+- **Packaging.** Code signing and notarization (needs an Apple Developer account), a Homebrew cask, and translations.
+
 ## Safety and disclaimer
 
 This is unofficial software. It controls volumes on your audio interface. Use it at your own risk and keep your speakers and ears safe: the "Safe start level" setting exists for that reason. Tested with one iD14 MkII on macOS 14.
