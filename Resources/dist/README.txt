@@ -3,7 +3,8 @@ Level iD – slim menu bar app for the Audient iD14 MkII
 
 Requirements
 - Mac with Apple silicon (M1 or newer), macOS 14 Sonoma or newer
-- Audient iD14 MkII (other Audient devices are not supported)
+- Audient iD14 MkII. iD24 (unverified) and iD44 / iD44 MkII (beta) are detected and run
+  read-only: meters and volume display only. The iD4 is not supported.
 
 Installation
 1. Drag "Level iD" into the "Applications" folder.

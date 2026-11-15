@@ -7,8 +7,8 @@ struct ID14ControlApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
     init() {
-        // Hover-Tipps erst nach 1,5 s (Systemstandard ca. 0,5 s); gilt nur fuer diese App
-        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 1500])
+        // Hover-Tipps erst nach 2 s (Systemstandard ca. 0,5 s); gilt nur fuer diese App
+        UserDefaults.standard.register(defaults: ["NSInitialToolTipDelay": 2000])
         // Vorschau-Modus (rendert PNGs und beendet sich) greift vor allem anderen
         MeterPreview.renderIfRequested()
         // Zuerst Einzelinstanz pruefen (kann exit(0) ausloesen), erst danach Controller/USB.

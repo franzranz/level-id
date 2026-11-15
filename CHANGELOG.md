@@ -1,5 +1,14 @@
 # Changelog
 
+## 1.2.0
+
+- iD24 and iD44 / iD44 MkII are detected automatically and run read-only for now: meters and volume display work, but the app sends nothing to these devices until an owner confirms the protocol. iD24 is marked "unverified", iD44 "beta" (four input meters, no cue mix yet). The iD4 cannot be supported (no software volume control).
+- Settings → "Help verify this device…" walks owners of these models through five checks and prepares a report for a GitHub issue. Nothing is sent automatically.
+- Faster start after plugging in: only settings that differ from the device are sent, so the volume comes back after about 3 s instead of 4 s.
+- Click the RMS value under the meters to switch to PPM (peak programme meter, useful for podcasts). The choice is remembered, and the target zone and marker follow the mode.
+- Clearer target zone on the meters.
+- Tooltips appear after 2 s instead of 1.5 s.
+
 ## 1.1.0
 
 - Optional Mac volume keys (off by default): while the iD14 is the Mac's sound output, the volume and mute keys control the monitor or headphone volume, with a small on-screen display. Needs the Accessibility permission.
