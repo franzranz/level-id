@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 1.1.0
 
 - Optional Mac volume keys (off by default): while the iD14 is the Mac's sound output, the volume and mute keys control the monitor or headphone volume, with a small on-screen display. Needs the Accessibility permission.
 - Volume keys unmute the selected output, like macOS does.

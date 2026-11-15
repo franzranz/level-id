@@ -5,6 +5,12 @@ A tiny, free menu bar app for the **Audient iD14 MkII** on macOS. It remembers y
 > Level iD is an independent project. It is not affiliated with, endorsed by, or supported by Audient. "Audient" and "iD" are trademarks of their respective owners.
 
 <p align="center">
+  <a href="https://github.com/franzranz/level-id/releases/latest/download/Level-iD.dmg"><img src="https://img.shields.io/badge/Download-Level%20iD%20for%20Mac-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Level iD for Mac" height="44"></a>
+  <br>
+  <sub>Free · Apple silicon Mac · macOS 14 or newer · Audient iD14 MkII</sub>
+</p>
+
+<p align="center">
   <img src="docs/screenshot.png" alt="Level iD panel" width="320">
   <img src="docs/screenshot-settings.png" alt="Level iD settings" width="320">
 </p>
@@ -31,15 +37,17 @@ Gain, 48 V phantom power and the Hi-Z instrument switch are analog on the iD14 a
 - Apple silicon Mac (M1 or newer), macOS 14 Sonoma or newer
 - Audient iD14 MkII (other Audient interfaces are not supported)
 
-## Install
+## Install (3 steps)
 
-1. Download the latest `Level-iD-<version>.dmg` from the [Releases](../../releases) page and drag **Level iD** to Applications.
-2. The app is not notarized by Apple, so macOS warns on first launch:
-   - macOS 14: right-click the app, then Open, then Open.
-   - macOS 15 and newer: launch it once, then go to System Settings, Privacy & Security, and click "Open Anyway".
-3. Plug in the iD14. The icon appears in the menu bar.
+1. **Download** [Level-iD.dmg](https://github.com/franzranz/level-id/releases/latest/download/Level-iD.dmg) and open it.
+2. **Drag** the Level iD icon onto the Applications folder.
+3. **Open** Level iD from Applications. macOS warns the first time because the app isn't from the App Store:
+   - macOS 14: right-click Level iD, choose **Open**, then **Open** again.
+   - macOS 15 and newer: open it once, close the warning, then go to **System Settings → Privacy & Security**, scroll down and click **Open Anyway**.
 
-Do not run Audient's own iD app at the same time. While iD is running, Level iD switches to read-only automatically.
+That's it. Plug in your iD14 and the icon appears in the menu bar. You only have to do the warning step once.
+
+Please quit Audient's own iD app while you use Level iD. If iD is running, Level iD only watches and changes nothing.
 
 ## Build from source
 

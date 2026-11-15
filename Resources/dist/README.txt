@@ -1,4 +1,4 @@
-Level iD 1.0 – slim menu bar app for the Audient iD14 MkII
+Level iD – slim menu bar app for the Audient iD14 MkII
 ====================================================================
 
 Requirements
