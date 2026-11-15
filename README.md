@@ -32,7 +32,7 @@ Own an iD24 or iD44? You can help: Level iD detects the device automatically in 
 The iD14 starts at zero volume after every replug, and Audient's iD app doesn't restore it. iD also needs about 15–30 % CPU and 160 MB of memory while it runs. Level iD fixes both:
 
 - **Remembers volume.** Monitor and headphones fade back in after replugging, capped by a "Safe start level".
-- **Tiny.** About 0 % CPU and under 40 MB of memory (Activity Monitor), compared to about 160 MB for iD.
+- **Tiny.** About 0 % CPU and under 28 MB of memory (Activity Monitor), compared to about 160 MB for iD.
 - **Pro gain meter.** IEC scale, peak and RMS, peak hold and a clip light. Much clearer than iD's meters for setting gain.
 - **Cue mix.** Blend your live mic with computer playback.
 - **iD button.** Mute (monitor, headphones or both), Mono, Alt speakers or Talkback.
