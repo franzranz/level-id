@@ -17,16 +17,16 @@ A tiny, free menu bar app for the **Audient iD14 MkII** on macOS. It remembers y
 
 ## Why
 
-The iD14 forgets its monitor volume every time it is unplugged and comes back silent. The official iD software restores the mixer but not the volume, and it keeps the CPU busy while it runs. Level iD fixes both:
+The iD14 starts at zero volume after every replug, and Audient's iD app doesn't restore it. iD also needs about 15–30 % CPU and 160 MB of memory while it runs. Level iD fixes both:
 
-- **Remembers volume.** Monitor and headphone volume come back after replugging, faded in over 0.3 s and capped by a "Safe start level" so you never blast your ears or speakers.
-- **Light on resources.** About 0 % CPU and 14 MB of RAM with the panel closed (the official iD app used about 15 % CPU in our measurements).
-- **Input level meters** with RMS, peak hold, and a clip indicator, to help you set the gain.
-- **Cue mix** blend between your live microphone and computer playback.
-- **iD button** assignment: Off, Mute (monitor, headphones, or both), Mono, Alt speakers, or Talkback.
-- **Talkback** from mic 1, mic 2, both, or the Mac microphone, heard in the headphones only.
-- **Mac volume keys** (optional, off by default): while the iD14 is the Mac's sound output, the volume and mute keys control its monitor or headphone volume, with a small on-screen display. Shift = 0.1 dB steps. Turn it on in Settings; macOS asks for the Accessibility permission. Level iD is signed ad hoc, so with unsigned builds the permission must be re-granted after each update (remove the app from the list and add it again).
-- **Speaker pair switch** for monitors on Output 1/2 or 3/4.
+- **Remembers volume.** Monitor and headphones fade back in after replugging, capped by a "Safe start level".
+- **Tiny.** About 0 % CPU and under 40 MB of memory (Activity Monitor), compared to about 160 MB for iD.
+- **Pro gain meter.** IEC scale, peak and RMS, peak hold and a clip light. Much clearer than iD's meters for setting gain.
+- **Cue mix.** Blend your live mic with computer playback.
+- **iD button.** Mute (monitor, headphones or both), Mono, Alt speakers or Talkback.
+- **Talkback.** Mic 1, Mic 2, both or the Mac mic, headphones only.
+- **Mac volume keys** (optional, off by default). Volume and mute keys control the iD14. Needs the Accessibility permission, which has to be granted again after each update.
+- **Speaker pair switch.** Output 1/2 or 3/4.
 
 ## What it cannot do
 
