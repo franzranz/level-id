@@ -128,6 +128,8 @@ enum ID14 {
 
 enum DB {
     static let minimum: Double = -128.0
+    /// Ab diesem Wert gilt ein Pegel in der Bedienung als „aus“ (UI: offThresholdDB)
+    static let offThreshold: Double = -80.0
 
     /// dB -> int16 LE in 1/256 dB. Begrenzt auf [-128, maxDB]. <= -128 ergibt 0x8000.
     /// Abschneiden Richtung 0 (wie iD, verifiziert: -0.6 dB -> 0xFF67).

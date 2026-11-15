@@ -16,13 +16,13 @@ import Foundation
           && MeterScale.zone(-2.99) == .danger && MeterScale.zone(0) == .danger && MeterScale.zone(-60) == .below)
 
     // RMS konvergiert auf den Pegel eines konstanten Signals (20 Hz, 3 s)
-    let m = MeterModel()
+    let m = MeterModel(rampSeconds: 0)
     var t = 100.0
     for _ in 0..<60 { m.update(inputs: [-20, -12] + [Double](repeating: -128, count: 14), now: t); t += 0.05 }
     check("RMS: konstantes Signal konvergiert (-20 dB)", abs(m.mics[0].rmsDB + 20) < 0.1, "\(m.mics[0].rmsDB)")
     check("RMS: Mic 2 unabhaengig (-12 dB)", abs(m.mics[1].rmsDB + 12) < 0.1, "\(m.mics[1].rmsDB)")
     // RMS faellt mit tau ~ 300 ms: nach Stille nach 0,3 s auf 1/e der Leistung (-4,34 dB)
-    let m2 = MeterModel()
+    let m2 = MeterModel(rampSeconds: 0)
     var t2 = 0.0
     for _ in 0..<100 { m2.update(inputs: [-20, -128] + [Double](repeating: -128, count: 14), now: t2); t2 += 0.05 }
     for _ in 0..<6 { m2.update(inputs: [Double](repeating: -128, count: 16), now: t2); t2 += 0.05 }
@@ -37,7 +37,20 @@ import Foundation
           MeterModel.clipOpacity(lastClipAt: nil, now: 5) == 0 && MeterModel.clipOpacity(lastClipAt: t0 + 1.9, now: t0 + 1.9) == 1)
 
     // Spitzenwert und Clip, resetPeak setzt zurueck
-    let p = MeterModel()
+    // Hochfahren: Obergrenze steigt in 0,5 s (Ease-in) von -60 auf 0 dB; Ausreisser am Anfang werden nicht Spitze/Clip
+    let w = MeterModel(rampSeconds: 0.5)
+    w.update(inputs: [0, -90] + [Double](repeating: -128, count: 14), now: 10)
+    check("Hochfahren: Vollausschlag beim Start wird auf -60 dB begrenzt, kein Clip, Meter sofort live",
+          w.mics[0].levelDB == -60 && w.mics[0].maxPeakDB == DB.minimum && w.mics[0].lastClipAt == nil && w.live)
+    check("Hochfahren: leise Werte bleiben unveraendert und zaehlen als Spitze", w.mics[1].levelDB == -90 && w.mics[1].maxPeakDB == -90)
+    w.update(inputs: [0, 0] + [Double](repeating: -128, count: 14), now: 10.25)
+    check("Hochfahren: nach halber Zeit Obergrenze -45 dB (Ease-in)", abs(w.mics[0].levelDB - (-45)) < 1e-9 && w.mics[0].lastClipAt == nil)
+    w.update(inputs: [-20, -30] + [Double](repeating: -128, count: 14), now: 10.6)
+    check("Hochfahren: danach normale Messung, Spitze ohne Ausreisser", w.mics[0].levelDB == -20 && w.mics[0].maxPeakDB == -20)
+    w.reset()
+    w.update(inputs: [0, 0] + [Double](repeating: -128, count: 14), now: 20)
+    check("Hochfahren: nach reset() erneut aktiv", w.mics[0].maxPeakDB == DB.minimum && w.mics[0].levelDB == -60)
+    let p = MeterModel(rampSeconds: 0)
     p.update(inputs: [-30, -40] + [Double](repeating: -128, count: 14), now: 1)
     p.update(inputs: [-6, -40] + [Double](repeating: -128, count: 14), now: 1.05)
     p.update(inputs: [-50, -40] + [Double](repeating: -128, count: 14), now: 1.10)

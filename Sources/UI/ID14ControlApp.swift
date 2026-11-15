@@ -34,10 +34,13 @@ struct ID14ControlApp: App {
 @MainActor
 final class AppDelegate: NSObject, NSApplicationDelegate {
     private var statusController: StatusItemController?
+    private var mediaKeyTap: MediaKeyTap?
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         if let c = AppContext.controller {
             statusController = StatusItemController(controller: c)
+            // Standardmaessig aus: der Tap entsteht erst, wenn "Use Mac volume keys" an ist
+            mediaKeyTap = MediaKeyTap(controller: c, hud: VolumeHUD())
         }
     }
 }

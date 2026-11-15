@@ -884,6 +884,7 @@ final class DeviceController: ObservableObject {
         case let .opened(passive, fading):
             connection = passive ? .passive : .connected
             isFading = fading && !passive
+            meters.reset()   // nach dem Anstecken neu hochfahren (Ausreisser am Anfang begrenzen)
             if !passive { resetTalkbackRuntime() }   // Push sendet Talkback aus
             // Passiv-Zustand hat sich waehrend des Oeffnens geaendert: angleichen.
             if passive != originalAppRunning {
@@ -1210,6 +1211,37 @@ final class DeviceController: ObservableObject {
     func setHideIconWhenDisconnected(_ on: Bool) {
         state.ui.hideIconWhenDisconnected = on
         store.scheduleSave(state)
+    }
+
+    func setVolumeKeys(_ on: Bool) {
+        state.ui.volumeKeys = on
+        store.scheduleSave(state)
+    }
+
+    func setVolumeKeysTarget(_ t: UInt8) {
+        state.ui.volumeKeysTarget = min(t, 1)
+        store.scheduleSave(state)
+    }
+
+    /// Ein Schritt per Mac-Lautstaerketaste auf das gewaehlte Ziel (gleiche Befehle wie der Slider).
+    /// Beim Kopfhoerer-Ziel dient der gespeicherte Wert als Basis, auch nach einer Aenderung am Geraet.
+    /// Wie macOS hebt jede Lauter-/Leiser-Taste zuerst Stumm des Ziels auf.
+    func volumeKey(up: Bool, fine: Bool) {
+        if state.ui.volumeKeysTarget == 1 {
+            if state.monitor.phonesCut { setPhonesCut(false) }
+            let next = VolumeStep.next(current: state.phonesVolumeDB, up: up, fine: fine)
+            if next != state.phonesVolumeDB { setPhonesVolume(next) }
+        } else {
+            if state.monitor.cut { setCut(false) }
+            let next = VolumeStep.next(current: state.monitor.volumeDB, up: up, fine: fine)
+            if next != state.monitor.volumeDB { setMonitorVolume(next) }
+        }
+    }
+
+    /// Mute-Taste: schaltet Stumm des gewaehlten Ziels um.
+    func volumeKeyMute() {
+        if state.ui.volumeKeysTarget == 1 { setPhonesCut(!state.monitor.phonesCut) }
+        else { setCut(!state.monitor.cut) }
     }
 
     /// Ziel der iD-Taste in der Belegung "Stumm" (App-Einstellung, kein USB).

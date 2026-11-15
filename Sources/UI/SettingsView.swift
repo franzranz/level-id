@@ -18,6 +18,7 @@ struct SettingsView: View {
                     set: { on in
                         SingleInstance.setLoginItem(on, controller: controller)
                         launchAtLogin = SingleInstance.loginEnabled
+            MediaKeyStatus.shared.retry()
                     }))
                     .help("Starts the app at login and restarts it automatically after a crash.")
                 Toggle("Hide icon when disconnected", isOn: Binding(
@@ -113,11 +114,56 @@ struct SettingsView: View {
             .disabled(controller.connection == .passive || controller.connection == .unresponsive)
             .help(controller.connection == .passive ? "Not available while the original iD app is running."
                   : controller.connection == .unresponsive ? "Not available while the ID14 is not responding." : "")
+
+            // Eigene Gruppe: Toggle und Berechtigung bleiben auch im Passiv-Modus bedienbar (reine App-Einstellung)
+            group("Mac volume keys") {
+                Toggle("Use Mac volume keys", isOn: Binding(
+                    get: { state.ui.volumeKeys },
+                    set: { controller.setVolumeKeys($0) }))
+                    .help("Volume keys control the ID14 while it is the Mac's sound output. Shift = 0.1 dB steps.")
+                if state.ui.volumeKeys {
+                    HStack {
+                        Text("Controls")
+                        Spacer()
+                        Picker("Controls", selection: Binding(
+                            get: { state.ui.volumeKeysTarget },
+                            set: { controller.setVolumeKeysTarget($0) })) {
+                            Text("Monitor").tag(UInt8(0))
+                            Text("Headphones").tag(UInt8(1))
+                        }
+                        .pickerStyle(.menu)
+                        .labelsHidden()
+                    }
+                    VolumeKeysPermissionRow()
+                }
+            }
         }
         .padding(14)
         .frame(width: 260)
         .onAppear {
             launchAtLogin = SingleInstance.loginEnabled
+        }
+    }
+
+    /// Hinweis auf fehlende Bedienungshilfen-Berechtigung (nur sichtbar, solange der Tap nicht angelegt werden kann)
+    private struct VolumeKeysPermissionRow: View {
+        @ObservedObject private var tap = MediaKeyStatus.shared
+
+        var body: some View {
+            if tap.needsPermission {
+                HStack {
+                    Text("Needs Accessibility permission")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Spacer()
+                    Button("Open Settings…") {
+                        if let url = URL(string: "x-apple.systempreferences:com.apple.preference.security?Privacy_Accessibility") {
+                            NSWorkspace.shared.open(url)
+                        }
+                    }
+                    .controlSize(.small)
+                }
+            }
         }
     }
 

@@ -204,6 +204,25 @@ do {
     check("Max-Schieber wird auf -30 begrenzt", s.sanitized().restore.monitorCapDB == -30)
     s.restore.monitorCapDB = 0
     check("Max 0 dB = Aus", s.sanitized().restore.capIsOff)
+    func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-9 }
+    check("VolumeStep -23,4 hoch -> -23", near(VolumeStep.next(current: -23.4, up: true, fine: false), -23))
+    check("VolumeStep -23,4 runter -> -24", near(VolumeStep.next(current: -23.4, up: false, fine: false), -24))
+    check("VolumeStep -23,0 hoch -> -22", near(VolumeStep.next(current: -23.0, up: true, fine: false), -22))
+    check("VolumeStep fein -23,4 hoch -> -23,3", near(VolumeStep.next(current: -23.4, up: true, fine: true), -23.3))
+    check("VolumeStep aus hoch -> -79", near(VolumeStep.next(current: -128, up: true, fine: false), -79))
+    check("VolumeStep aus fein hoch -> -79,9", near(VolumeStep.next(current: -128, up: true, fine: true), -79.9))
+    check("VolumeStep -80 runter -> aus", VolumeStep.next(current: -80, up: false, fine: false) == DB.minimum)
+    check("VolumeStep -0,5 hoch -> 0", near(VolumeStep.next(current: -0.5, up: true, fine: false), 0))
+    check("VolumeStep.fraction -128 -> 0", near(VolumeStep.fraction(-128), 0))
+    check("VolumeStep.fraction -80 -> 0", near(VolumeStep.fraction(-80), 0))
+    check("VolumeStep.fraction -40 -> 0,5", near(VolumeStep.fraction(-40), 0.5))
+    check("VolumeStep.fraction 0 -> 1", near(VolumeStep.fraction(0), 1))
+    check("VolumeStep.fraction +3 -> 1", near(VolumeStep.fraction(3), 1))
+    check("VolumeStep 0 hoch bleibt 0", near(VolumeStep.next(current: 0, up: true, fine: false), 0))
+    check("Lautstaerketasten Standard aus, Ziel Monitor",
+          !DeviceState().ui.volumeKeys && DeviceState().ui.volumeKeysTarget == 0)
+    var vk = DeviceState(); vk.ui.volumeKeysTargetStored = 5
+    check("sanitized: Tasten-Ziel 5 -> nil", vk.sanitized().ui.volumeKeysTargetStored == nil)
 }
 
 print(failures == 0 ? "\nALLE TESTS PASS" : "\n\(failures) TEST(S) FEHLGESCHLAGEN")

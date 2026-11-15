@@ -23,7 +23,7 @@ fi
 # Dateien, die OHNE USB/UI kompilieren muessen (Offline-Tests)
 CORE_PURE=(Sources/Core/Protocol.swift Sources/Core/DeviceState.swift Sources/Core/MixerMath.swift
            Sources/Core/PushPlan.swift Sources/Core/IDStateImporter.swift Sources/Core/StateStore.swift
-           Sources/Core/RecordingTransport.swift)
+           Sources/Core/RecordingTransport.swift Sources/Core/VolumeStep.swift)
 
 # Test-Build: zusaetzlich Controller + MeterModel (ohne USBTransport/cusb; Diag liefert Tests/FaultTransport.swift)
 CORE_TEST=("${CORE_PURE[@]}" Sources/Core/MeterModel.swift Sources/Core/MeterScale.swift Sources/Core/TalkbackBridge.swift

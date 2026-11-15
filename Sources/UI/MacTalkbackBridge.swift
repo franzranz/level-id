@@ -146,7 +146,7 @@ private let renderProc: AURenderCallback = { refCon, _, _, _, frames, ioData in
 
 // MARK: - CoreAudio-Helfer
 
-private enum HAL {
+enum HAL {
     static func address(_ sel: AudioObjectPropertySelector,
                         _ scope: AudioObjectPropertyScope = kAudioObjectPropertyScopeGlobal) -> AudioObjectPropertyAddress {
         AudioObjectPropertyAddress(mSelector: sel, mScope: scope, mElement: kAudioObjectPropertyElementMain)
@@ -200,6 +200,22 @@ private enum HAL {
     static func builtInMic() -> AudioDeviceID? {
         deviceIDs().first { channels($0, scope: kAudioObjectPropertyScopeInput) > 0
             && transportType($0) == kAudioDeviceTransportTypeBuiltIn }
+    }
+
+    /// macOS-Standardausgabegeraet (guenstige Einzelabfrage, ohne Geraetesuche)
+    static func defaultOutputDevice() -> AudioDeviceID? {
+        var a = address(kAudioHardwarePropertyDefaultOutputDevice)
+        var dev = AudioDeviceID(0)
+        var size = UInt32(MemoryLayout<AudioDeviceID>.size)
+        guard AudioObjectGetPropertyData(AudioObjectID(kAudioObjectSystemObject), &a, 0, nil, &size, &dev) == noErr,
+              dev != 0 else { return nil }
+        return dev
+    }
+
+    /// Ist das macOS-Standardausgabegeraet das ID14? (mit voller Geraetesuche; MediaKeyTap cached die ID)
+    static func defaultOutputIsID14() -> Bool {
+        guard let dev = defaultOutputDevice(), let id14 = id14Output() else { return false }
+        return dev == id14
     }
 
     /// ID14: Name oder UID enthaelt "iD14", mindestens 6 Ausgangskanaele

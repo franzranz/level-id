@@ -35,25 +35,51 @@ final class MeterModel: ObservableObject {
     private var power = [Double](repeating: 0, count: 2)
     private var lastUpdate: Double?
 
-    init() { mics = [Self.silent, Self.silent] }
+    /// Hochfahren: Die ersten Messwerte nach dem Start der Meter bzw. nach dem Anstecken sind teils Unsinn
+    /// (Vollausschlag 0 dB), obwohl nichts anliegt. Statt sie zu verwerfen, steigt eine Obergrenze nach dem
+    /// Start in `rampSeconds` von -60 dB auf 0 dB (Ease-in: erst langsam, dann schneller). Messwerte werden bis dahin darauf
+    /// begrenzt: Das Meter reagiert sofort, aber ein Ausreisser am Anfang wird weder Spitze noch Clip.
+    static let rampFloorDB = -60.0
+    private let rampSeconds: Double
+    private var rampStart: Double?
+
+    init(rampSeconds: Double = 0.5) {
+        self.rampSeconds = rampSeconds
+        mics = [Self.silent, Self.silent]
+    }
+
+    /// Obergrenze zum Zeitpunkt `now` (0 dB nach Ablauf der Hochfahrzeit)
+    private func rampCapDB(now: Double) -> Double {
+        guard let start = rampStart, rampSeconds > 0 else { return 0 }
+        let t = min(max((now - start) / rampSeconds, 0), 1)
+        let eased = t * t   // Ease-in (quadratisch)
+        return Self.rampFloorDB * (1 - eased)
+    }
 
     /// 16 Eingangswerte vom Geraet. Jeder Messwert wird veroeffentlicht (Meter laufen nur bei offenem Panel).
     func update(inputs values: [Double], now: Double = ProcessInfo.processInfo.systemUptime) {
         guard values.count >= 2 else { return }
+        if rampStart == nil { rampStart = now }
+        let cap = rampCapDB(now: now)
         let dt = lastUpdate.map { min(max(now - $0, 0), 1.0) } ?? 0.05
         lastUpdate = now
         let a = 1 - exp(-dt / Self.rmsTau)
         var next = mics
         for i in 0..<2 {
-            let v = values[i].isFinite ? values[i] : DB.minimum
+            let raw = values[i].isFinite ? values[i] : DB.minimum
+            let v = min(raw, cap)
+            // Von der Obergrenze gekappte Werte (Ausreisser beim Hochfahren) zaehlen nicht als Spitze/Clip
+            let trusted = raw <= cap
             let lin = pow(10, v / 20)
             power[i] += a * (lin * lin - power[i])
             let rms = power[i] > 1e-13 ? max(DB.minimum, 10 * log10(power[i])) : DB.minimum
             var ch = mics[i]
             ch.levelDB = v
             ch.rmsDB = rms
-            ch.maxPeakDB = max(ch.maxPeakDB, v)
-            if v >= Self.clipThresholdDB { ch.lastClipAt = now }
+            if trusted {
+                ch.maxPeakDB = max(ch.maxPeakDB, v)
+                if v >= Self.clipThresholdDB { ch.lastClipAt = now }
+            }
             next[i] = ch
         }
         if next != mics { mics = next }
@@ -79,6 +105,7 @@ final class MeterModel: ObservableObject {
     func reset() {
         power = [0, 0]
         lastUpdate = nil
+        rampStart = nil
         let next = [Self.silent, Self.silent]
         if next != mics { mics = next }
         if live { live = false }

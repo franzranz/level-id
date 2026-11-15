@@ -18,7 +18,7 @@ struct VolumeSlider: View {
 
     /// Angezeigter Anteil 0...1 (−80…0)
     private var fraction: Double {
-        (max(offThresholdDB, min(0, value)) - offThresholdDB) / -offThresholdDB
+        VolumeStep.fraction(value)
     }
 
     var body: some View {
@@ -91,16 +91,7 @@ struct VolumeSlider: View {
     /// Schritt per Taste oder Scrollrad: 1 dB, mit Shift 0,1 dB. Ohne Shift rastet der Wert auf ganze dB ein.
     /// Aus: nach oben die erste hoerbare Stufe, nach unten bleibt es aus.
     private func change(_ dir: Double, fine isFine: Bool) {
-        if value <= offThresholdDB {
-            if dir > 0 { onSet(offThresholdDB + (isFine ? 0.1 : 1)) }
-            return
-        }
-        let target: Double
-        if isFine {
-            target = (value * 10).rounded() / 10 + dir * 0.1
-        } else {
-            target = dir > 0 ? floor(value + 1e-6) + 1 : ceil(value - 1e-6) - 1
-        }
-        onSet(target <= offThresholdDB ? DB.minimum : min(0, target))
+        let next = VolumeStep.next(current: value, up: dir > 0, fine: isFine)
+        if next != value { onSet(next) }
     }
 }

@@ -19,6 +19,7 @@ The iD14 forgets its monitor volume every time it is unplugged and comes back si
 - **Cue mix** blend between your live microphone and computer playback.
 - **iD button** assignment: Off, Mute (monitor, headphones, or both), Mono, Alt speakers, or Talkback.
 - **Talkback** from mic 1, mic 2, both, or the Mac microphone, heard in the headphones only.
+- **Mac volume keys** (optional, off by default): while the iD14 is the Mac's sound output, the volume and mute keys control its monitor or headphone volume, with a small on-screen display. Shift = 0.1 dB steps. Turn it on in Settings; macOS asks for the Accessibility permission. Level iD is signed ad hoc, so with unsigned builds the permission must be re-granted after each update (remove the app from the list and add it again).
 - **Speaker pair switch** for monitors on Output 1/2 or 3/4.
 
 ## What it cannot do

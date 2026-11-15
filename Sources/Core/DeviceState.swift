@@ -186,6 +186,18 @@ struct UIPreferences: Codable, Equatable {
         get { hideIconWhenDisconnectedStored ?? false }
         set { hideIconWhenDisconnectedStored = newValue }
     }
+    /// Mac-Lautstaerketasten steuern das ID14. Standard: aus (kein Event-Tap, keine Berechtigungsabfrage).
+    var volumeKeysStored: Bool?
+    var volumeKeys: Bool {
+        get { volumeKeysStored ?? false }
+        set { volumeKeysStored = newValue }
+    }
+    /// Ziel der Lautstaerketasten: 0 = Monitor, 1 = Kopfhoerer. Standard: Monitor.
+    var volumeKeysTargetStored: UInt8?
+    var volumeKeysTarget: UInt8 {
+        get { volumeKeysTargetStored ?? 0 }
+        set { volumeKeysTargetStored = newValue }
+    }
     /// Im Cue-Mix sichtbare Eingaenge (Nutzerwunsch: Mic 1, Mic 2, DAW 1/2)
     var visibleInputs: [Int] = [ID14.Input.mic1, ID14.Input.mic2, ID14.Input.daw1]
     /// Schrittweite fuer Lautstaerke per Pfeiltaste/Mausrad
@@ -288,6 +300,8 @@ extension DeviceState {
         s.routeHost = fixed(s.routeHost, d.routeHost)
         s.routeOut = fixed(s.routeOut, d.routeOut)
         s.opticalInputMode = fixed(s.opticalInputMode, d.opticalInputMode)
+
+        if let t = s.ui.volumeKeysTargetStored, t > 1 { s.ui.volumeKeysTargetStored = nil }
 
         var m = s.monitor
         m.volumeDB = dbv(m.volumeDB, DB.minimum, 0, def: DB.minimum)

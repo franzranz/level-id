@@ -4,7 +4,7 @@ import SwiftUI
 import AppKit
 
 /// Ab diesem Wert gilt ein Pegel als „aus“ (wird beim Ziehen zu -128).
-let offThresholdDB: Double = -80.0
+let offThresholdDB: Double = DB.offThreshold
 
 /// Anzeige eines dB-Wertes, z.B. „−23 dB“ (ganze dB; der Schieber bleibt fein). Werte <= offAt erscheinen als „aus“ (nil = nie).
 func dbText(_ v: Double, offAt: Double? = offThresholdDB, fine: Bool = false) -> String {
