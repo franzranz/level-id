@@ -31,6 +31,29 @@ struct MonitorState: Codable, Equatable {
     var altMonTrimDB: Double = 0.0
     var functionKeyMode: [UInt8] = [0xFF, 0xFF]
     var phonesCut: Bool = false              // FU 0x0A Mute Kanal 5/6
+    /// Zweiter Kopfhoerer (iD44). Nur lokaler Zustand: das Control ist unbekannt, es gibt KEINEN USB-Befehl dafuer.
+    var phones2CutStored: Bool?
+    var phones2Cut: Bool {
+        get { phones2CutStored ?? false }
+        set { phones2CutStored = newValue }
+    }
+
+    /// Belegung der Funktionstasten F1-F3 (iD24/iD44/iD44 MkII) als IDKeyFunction-Rohwerte. NUR LOKAL: das
+    /// Mehrtasten-Protokoll ist unbekannt, es gibt KEINEN USB-Befehl dafuer. nil = alle Aus.
+    var functionKeyModesStored: [Int16]?
+    static let multiKeyCount = 3
+    /// Belegung der Taste `index` (0-2); fehlend/unbekannt = Aus
+    func functionKey(_ index: Int) -> IDKeyFunction {
+        guard let m = functionKeyModesStored, m.indices.contains(index) else { return .none }
+        return IDKeyFunction(rawValue: m[index]) ?? .none
+    }
+    mutating func setFunctionKey(_ index: Int, _ f: IDKeyFunction) {
+        guard (0..<Self.multiKeyCount).contains(index) else { return }
+        var m = functionKeyModesStored ?? Array(repeating: IDKeyFunction.none.rawValue, count: Self.multiKeyCount)
+        while m.count < Self.multiKeyCount { m.append(IDKeyFunction.none.rawValue) }
+        m[index] = f.rawValue
+        functionKeyModesStored = m
+    }
 
     /// Belegung der iD-Taste (gespeichert als functionKeyMode-Bytes)
     var idKey: IDKeyFunction {
@@ -79,7 +102,7 @@ enum IDKeyChoice: String, CaseIterable, Codable {
     static let selectable: [IDKeyChoice] = [.none, .cut, .mono, .altSpeaker, .talkback]
     init(device f: IDKeyFunction) {
         switch f {
-        case .none: self = .none
+        case .none, .polarity: self = .none   // Polaritaet gibt es nur an Mehrtasten-Geraeten, nie am iD14
         case .cut: self = .cut
         case .dim: self = .dim
         case .mono: self = .mono
@@ -155,7 +178,7 @@ struct RestorePreferences: Codable, Equatable {
 /// Belegung der iD-Taste am ID14 MkII (Unit 0x36, CS 0x10, Kanal 0, int16 LE).
 /// Werte = CS-Nummer der jeweiligen Monitor-Funktion (aus iD MonitorControllerModel::functionKeyModeToString).
 enum IDKeyFunction: Int16, CaseIterable, Codable {
-    case none = -1, mono = 0x00, cut = 0x04, dim = 0x05, talkback = 0x07, altSpeaker = 0x0C
+    case none = -1, mono = 0x00, polarity = 0x03, cut = 0x04, dim = 0x05, talkback = 0x07, altSpeaker = 0x0C
 
     var bytes: [UInt8] {
         let u = UInt16(bitPattern: rawValue)
@@ -172,6 +195,7 @@ enum IDKeyFunction: Int16, CaseIterable, Codable {
         case .cut: return "Mute"
         case .dim: return "Dim"
         case .mono: return "Mono"
+        case .polarity: return "Polarity"
         case .altSpeaker: return "Alt speakers"
         case .talkback: return "Talkback"
         }
@@ -191,6 +215,23 @@ struct UIPreferences: Codable, Equatable {
     var volumeKeys: Bool {
         get { volumeKeysStored ?? false }
         set { volumeKeysStored = newValue }
+    }
+    /// Peak-Haltezeit der Eingangsmeter wie in Logic: 2, 4, 6 s oder 0 = unendlich. Standard 2 s.
+    static let peakHoldChoices: [Double] = [2, 4, 6, 0]
+    static let peakHoldDefault: Double = 2
+    var peakHoldStored: Double?
+    var peakHold: Double {
+        get { peakHoldStored ?? Self.peakHoldDefault }
+        set { peakHoldStored = newValue }
+    }
+    /// Haltezeit in Sekunden fuer das Meter (unendlich bei 0)
+    var peakHoldSeconds: Double { peakHold == 0 ? .infinity : peakHold }
+    /// Anzeige der kleinen Pegelzahl: RMS (Standard) oder PPM; Klick darauf wechselt.
+    enum LevelReadout: UInt8 { case rms = 0, ppm = 1 }
+    var levelReadoutStored: UInt8?
+    var levelReadout: LevelReadout {
+        get { levelReadoutStored.flatMap(LevelReadout.init(rawValue:)) ?? .rms }
+        set { levelReadoutStored = newValue.rawValue }
     }
     /// Ziel der Lautstaerketasten: 0 = Monitor, 1 = Kopfhoerer. Standard: Monitor.
     var volumeKeysTargetStored: UInt8?
@@ -254,6 +295,13 @@ struct DeviceState: Codable, Equatable {
         set { phonesVolumeStoredDB = newValue }
     }
 
+    /// Zweiter Kopfhoerer (iD44): nur lokaler Zustand, kein USB-Befehl (Control unbekannt). nil = nie gesetzt.
+    var phones2VolumeStoredDB: Double?
+    var phones2VolumeDB: Double {
+        get { phones2VolumeStoredDB ?? Self.phonesVolumeDefaultDB }
+        set { phones2VolumeStoredDB = newValue }
+    }
+
     /// Kopfhoerer-MIX-Ausgang (FU 0x0C Kanal 3/4). Im UI nicht mehr als Hauptregler, fest gespeichert.
     var phonesLevelDB: Double {
         get { mixOutputDB.indices.contains(2) ? mixOutputDB[2] : 0 }
@@ -302,6 +350,9 @@ extension DeviceState {
         s.opticalInputMode = fixed(s.opticalInputMode, d.opticalInputMode)
 
         if let t = s.ui.volumeKeysTargetStored, t > 1 { s.ui.volumeKeysTargetStored = nil }
+        if let h = s.ui.peakHoldStored, !UIPreferences.peakHoldChoices.contains(h) { s.ui.peakHoldStored = nil }
+
+        if let r = s.ui.levelReadoutStored, UIPreferences.LevelReadout(rawValue: r) == nil { s.ui.levelReadoutStored = nil }
 
         var m = s.monitor
         m.volumeDB = dbv(m.volumeDB, DB.minimum, 0, def: DB.minimum)
@@ -311,6 +362,12 @@ extension DeviceState {
         if let t = m.muteTargetStored, t > 2 { m.muteTargetStored = nil }
         m.functionKeyMode = fixed(m.functionKeyMode, d.monitor.functionKeyMode)
         m.functionKeyMode = IDKeyFunction(bytes: m.functionKeyMode).bytes   // unbekannte Werte -> Aus
+        if m.idKey == .polarity { m.idKey = .none }   // einzelne iD-Taste (iD14): Polaritaet gibt es dort nicht
+        if let k = m.functionKeyModesStored {
+            let fixedKeys = Array((k + Array(repeating: IDKeyFunction.none.rawValue, count: MonitorState.multiKeyCount))
+                .prefix(MonitorState.multiKeyCount))
+            m.functionKeyModesStored = fixedKeys.map { IDKeyFunction(rawValue: $0)?.rawValue ?? IDKeyFunction.none.rawValue }
+        }
         // Mix-Regler entfernt: alte Wahl ohne Wirkung, die Geraetetaste faellt auf "Aus" zurueck
         if m.idKeyMixKnobStored == true { m.idKey = .none }
         m.idKeyMixKnobStored = nil
@@ -326,6 +383,7 @@ extension DeviceState {
 
         if let b = s.cueBlendStored { s.cueBlendStored = Array(b.prefix(2)).map { unit($0, Self.cueBlendDefault) } }
         if let p = s.phonesVolumeStoredDB { s.phonesVolumeStoredDB = dbv(p, DB.minimum, 0, def: Self.phonesVolumeDefaultDB) }
+        if let p = s.phones2VolumeStoredDB { s.phones2VolumeStoredDB = dbv(p, DB.minimum, 0, def: Self.phonesVolumeDefaultDB) }
         return s
     }
 }
@@ -343,6 +401,8 @@ struct SetCommand: Equatable, CustomStringConvertible {
 /// Alle Methoden sind blockierend und werden NUR auf der seriellen Queue des DeviceController aufgerufen.
 protocol DeviceTransport: AnyObject {
     var isOpen: Bool { get }
+    /// PID des geoeffneten Geraets (bestimmt das DeviceProfile). Standard: iD14 MkII.
+    var openedProductID: UInt16 { get }
     func open() -> Bool
     func close()
     /// GET (CUR/RANGE/MEM). Rueckgabe nil bei Fehler.
@@ -352,5 +412,6 @@ protocol DeviceTransport: AnyObject {
 }
 
 extension DeviceTransport {
+    var openedProductID: UInt16 { ID14.productID }
     func getCur(_ c: ID14.Control) -> [UInt8]? { get(.cur, unit: c.unit, wValue: c.wValue, length: c.length) }
 }

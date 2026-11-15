@@ -44,7 +44,18 @@ final class LoggingTransport: DeviceTransport, @unchecked Sendable {
         lock.lock(); volumeOneShot = DB.encode(db); notifyQueue.append([0x12, 0, 0, 0x36]); lock.unlock()
     }
     private var notifyQueue: [[UInt8]] = []
+    /// Gespeicherter Geraetezustand: GET liefert den zuletzt gesetzten Wert je Control (Schluessel Unit/wValue)
+    private var stored: [UInt32: [UInt8]] = [:]
+    private static func key(_ unit: UInt8, _ wValue: UInt16) -> UInt32 { UInt32(unit) << 16 | UInt32(wValue) }
+    /// Simuliert ein zurueckgesetztes Geraet (Ruhezustand, Neu-Einstecken): alle gespeicherten Werte weg
+    func resetDevice() { lock.lock(); stored.removeAll(); lock.unlock() }
     private var cutValue: UInt8 = 0
+    /// GET auf Mixer-Sends liefert nil (nicht lesbar)
+    var nilGetsForSends = false
+    /// Setzt Geraetewerte, als haette das Geraet sie schon (z.B. nach Aufnahme in den Plan)
+    func preload(_ cmds: [SetCommand]) {
+        lock.lock(); for c in cmds { stored[Self.key(c.control.unit, c.control.wValue)] = c.data }; lock.unlock()
+    }
     /// Simuliert ein leeres Geraet: GET auf Mixer-Sends liefert -128 dB
     var mixerSendsSilent = false
     /// Tastendruck auf die iD-Taste in der Belegung "Stumm": Firmware setzt Cut und meldet es
@@ -73,11 +84,17 @@ final class LoggingTransport: DeviceTransport, @unchecked Sendable {
         if unit == ID14.Monitor.cut.unit, wValue == ID14.Monitor.cut.wValue, inner.isOpen, !log.contains(where: { $0.control == ID14.Monitor.cut && $0.data == [0] }) || cutValue == 1 {
             let v = cutValue; lock.unlock(); return [v]
         }
+        if unit == ID14.mixerSend(input: 0, output: 0).unit, inner.isOpen, nilGetsForSends {
+            lock.unlock(); return nil
+        }
         if unit == ID14.mixerSend(input: 0, output: 0).unit, inner.isOpen, mixerSendsSilent {
             lock.unlock(); return [0x00, 0x80]      // frisch eingesteckt: alle Sends -128 dB
         }
         if unit == ID14.Monitor.talkback.unit, wValue == ID14.Monitor.talkback.wValue, inner.isOpen {
             let v: UInt8 = talkbackOn ? 1 : 0; lock.unlock(); return [v]
+        }
+        if inner.isOpen, let v = stored[Self.key(unit, wValue)], v.count == length {
+            lock.unlock(); _ = inner.get(request, unit: unit, wValue: wValue, length: length); return v
         }
         lock.unlock()
         let r = inner.get(request, unit: unit, wValue: wValue, length: length)
@@ -90,7 +107,11 @@ final class LoggingTransport: DeviceTransport, @unchecked Sendable {
     }
     func set(_ command: SetCommand) -> Bool {
         let ok = inner.set(command)
-        if ok { lock.lock(); log.append(command); lock.unlock() }
+        if ok {
+            lock.lock(); log.append(command)
+            stored[Self.key(command.control.unit, command.control.wValue)] = command.data
+            lock.unlock()
+        }
         return ok
     }
 }
@@ -158,7 +179,9 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
 
     // 1. Geraet faellt mitten im Push aus
     do {
-        let t = FaultTransport(); t.failAfterRequest = 5 + 30
+        // Diff-Push liest zuerst jedes Control (ein GET je Plan-Befehl), erst danach kommen die SETs
+        let planCount = PushPlan.fullState(DeviceState(), monitorVolumeDB: DB.minimum, phonesLevelDB: nil, phonesVolumeDB: DB.minimum).count
+        let t = FaultTransport(); t.failAfterRequest = 5 + planCount + 30
         let (c, hot) = makeController(t)
         hot.callback?(true)
         spin(2.0, until: { c.connection == .unresponsive })
@@ -166,7 +189,7 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         spin(0.2)
         let n = t.totalRequests
         spin(0.4)
-        check("Ausfall im Push: danach keine weitere Anfrage", t.totalRequests == n && n <= 5 + 30 + 4,
+        check("Ausfall im Push: danach keine weitere Anfrage", t.totalRequests == n && n <= 5 + planCount + 30 + 4,
               "requests=\(t.totalRequests) (nach Ausfall \(n))")
         check("Ausfall im Push: Transport geschlossen", !t.isOpen)
         // Setter bei .unresponsive: nur lokal
@@ -228,6 +251,9 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         hot.callback?(true)
         spin(1.0, until: { c.connection == .passive })
         check("Passiv: connection == .passive", c.connection == .passive)
+        // Im Passiv-Modus liest der Worker die Monitor-Werte einmal vom Geraet (refreshMonitor). Diese
+        // Ereignisse kommen asynchron an; erst danach den Vergleichszustand nehmen, sonst wackelt der Test.
+        spin(0.5)
         let before = c.state
         c.setMonitorVolume(-10); c.setDim(true); c.setCut(true); c.setPhonesVolume(-5)
         c.setSendVolume(input: 0, mix: 0, db: -3); c.setInputCut(input: 1, true); c.setCueBlend(mix: 0, 0.3)
@@ -472,44 +498,84 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         spin(0.1)
     }
 
-    // 6f2. Frisches Einstecken: stumme Mixer-Sends entfallen (nur wenn das Geraet sie als -128 dB meldet)
+    // 6f2. Diff-Push: nur Befehle senden, die vom Geraetewert abweichen
     do {
-        func mixerSends(_ t: LoggingTransport) -> [SetCommand] { t.sent.filter { $0.control.unit == ID14.mixerSend(input: 0, output: 0).unit } }
-        var fresh = fastTiming; fresh.freshPlugMinSeconds = 0
-        // a) Geraet leer + frisch: nur nicht stumme Sends, deutlich weniger Befehle
-        let t = LoggingTransport(); t.mixerSendsSilent = true
-        let (c, hot) = makeController(t, timing: fresh) {
-            $0.restore.rememberVolume = false
-            $0.inputs[10].mixes[0] = MixSend(volumeDB: 0, pan: 0.5)   // ein hoerbarer Send
+        func nonVolumeSets(_ t: LoggingTransport) -> [SetCommand] { t.sent.filter { $0.control != ID14.Monitor.volume } }
+        let plan = PushPlan.fullState(DeviceState(), monitorVolumeDB: DB.minimum, phonesLevelDB: nil, phonesVolumeDB: DB.minimum)
+        // Reine Diff-Logik (PushPlan.differing)
+        let keep = plan[0], skip = plan[1], nilOne = plan[2]
+        let sample = [keep, skip, nilOne]
+        let r1 = PushPlan.differing(sample) { c in
+            if c == keep.control { return keep.data.map { $0 &+ 1 } }
+            if c == skip.control { return skip.data }
+            return nil
         }
+        check("Diff: abweichend und nicht lesbar werden gesendet, gleicher Wert nicht",
+              r1.send.map { $0.control } == [keep.control, nilOne.control] && r1.unchanged == 1)
+        var reads: [ID14.Control: Int] = [:]
+        let dupPlan = [skip, SetCommand(control: skip.control, data: skip.data), keep]
+        let r2 = PushPlan.differing(dupPlan) { c in reads[c, default: 0] += 1; return c == skip.control ? skip.data : keep.data }
+        check("Diff: doppeltes Control wird beide Male gesendet (Reihenfolge erhalten), jedes Control einmal gelesen",
+              r2.send.count == 2 && r2.send[0].control == skip.control && r2.send[1].control == skip.control
+              && r2.unchanged == 1 && reads.values.allSatisfy { $0 == 1 }, "\(r2.send.count) \(reads)")
+        check("PushPlan erzeugt keine doppelten Controls", Set(plan.map { $0.control }).count == plan.count)
+        // Stumme Mixer-Sends: andere Bytes, aber beide -128 dB -> gleich; hoerbar oder anderes Control -> verschieden
+        let silentSend = SetCommand(control: ID14.mixerSend(input: 3, output: 2), data: DB.encode(DB.minimum))
+        check("Diff: stummer Send gilt als gleich, auch mit anderen Stumm-Bytes", PushPlan.equivalent(silentSend, [0x01, 0x80]))
+        check("Diff: stummer Send gegen hoerbaren Geraetewert ist verschieden", !PushPlan.equivalent(silentSend, DB.encode(-20)))
+        let silentVol = SetCommand(control: ID14.Monitor.volume, data: DB.encode(DB.minimum))
+        check("Diff: Stumm-Gleichheit nur fuer Mixer-Sends", !PushPlan.equivalent(silentVol, [0x01, 0x80]))
+
+        // a) Geraet meldet fuer einige Controls genau den Plan-Wert: die entfallen
+        let t = LoggingTransport()
+        let (c, hot) = makeController(t) { $0.restore.rememberVolume = false }
+        let known = Array(PushPlan.fullState(c.state, monitorVolumeDB: DB.minimum, phonesLevelDB: nil, phonesVolumeDB: DB.minimum)
+            .filter { $0.control.unit == ID14.mixerSend(input: 0, output: 0).unit }.prefix(40))
+        t.preload(known)
         spin(0.05)
         hot.callback?(true)
         spin(2.0, until: { c.connection == .connected })
         spin(0.8)
-        let sends = mixerSends(t)
-        check("Frisch: nur hoerbare Sends und die zwei Firmware-Standards werden gesendet", sends.count == 4 && sends.contains { $0.control == ID14.mixerSend(input: 0, output: 0) } && sends.contains { $0.control == ID14.mixerSend(input: 1, output: 1) }, "\(sends.count)")
+        let sentControls = Set(t.sent.map { $0.control })
+        check("Diff a: bekannte Controls werden nicht gesendet", known.allSatisfy { !sentControls.contains($0.control) })
+        check("Diff a: restliche Controls werden gesendet", t.sent.count > 50 && t.sent.count < plan.count - 30, "\(t.sent.count)")
         hot.callback?(false)
         spin(0.1)
-        // b) Frisch, aber Geraet meldet etwas anderes als -128: alles senden
-        let t2 = LoggingTransport()
-        let (c2, hot2) = makeController(t2, timing: fresh) { $0.restore.rememberVolume = false }
-        spin(0.05)
-        hot2.callback?(true)
-        spin(2.0, until: { c2.connection == .connected })
-        spin(0.8)
-        check("Frisch, Geraet nicht leer: alle 96 Mixer-Sends", mixerSends(t2).count == 96, "\(mixerSends(t2).count)")
-        hot2.callback?(false)
+        // b) GET liefert nil: alles wird gesendet (Lesefehler zaehlen nicht zur Gesundheitsregel)
+        let tb = LoggingTransport(); tb.nilGetsForSends = true
+        let (cb, hotb) = makeController(tb) { $0.restore.rememberVolume = false }
+        hotb.callback?(true)
+        spin(2.0, until: { cb.connection == .connected && tb.sent.count > 100 })
+        spin(0.3)
+        check("Diff b: GET nil -> alle Mixer-Sends gesendet, Verbindung bleibt",
+              cb.connection == .connected && tb.sent.filter { $0.control.unit == ID14.mixerSend(input: 0, output: 0).unit }.count == 96)
+        hotb.callback?(false)
         spin(0.1)
-        // c) Nicht frisch (App-Start mit angestecktem Geraet): alles senden
-        let t3 = LoggingTransport(); t3.mixerSendsSilent = true
-        let (c3, hot3) = makeController(t3) { $0.restore.rememberVolume = false }
-        hot3.callback?(true)
-        spin(2.0, until: { c3.connection == .connected })
-        spin(0.8)
-        check("Nicht frisch: alle 96 Mixer-Sends", mixerSends(t3).count == 96, "\(mixerSends(t3).count)")
-        hot3.callback?(false)
+        // c) Mehrfach-Control: PushPlan erzeugt keine -> oben ueber PushPlan.differing geprueft.
+        // d) Nach simuliertem Reset (alle Werte anders) wird alles erneut gesendet
+        let t4 = LoggingTransport()
+        let (c4, hot4) = makeController(t4) { $0.restore.rememberVolume = false }
+        hot4.callback?(true)
+        spin(3.0, until: { c4.connection == .connected && t4.sent.count > 100 })
+        spin(0.3)
+        hot4.callback?(false)
         spin(0.1)
-        _ = (c, c2, c3)
+        let n1 = nonVolumeSets(t4).count
+        hot4.callback?(true)
+        spin(2.0, until: { c4.connection == .connected })
+        spin(0.8)
+        check("Diff d1: zweites Anstecken ohne Reset sendet fast nichts", nonVolumeSets(t4).count - n1 < 5, "\(nonVolumeSets(t4).count - n1)")
+        hot4.callback?(false)
+        spin(0.1)
+        t4.resetDevice()
+        let n2 = nonVolumeSets(t4).count
+        hot4.callback?(true)
+        spin(2.0, until: { c4.connection == .connected })
+        spin(0.8)
+        check("Diff d2: nach Reset wird alles gesendet", nonVolumeSets(t4).count - n2 >= n1 - 5, "\(nonVolumeSets(t4).count - n2) von \(n1)")
+        hot4.callback?(false)
+        spin(0.1)
+        _ = (c, cb)
     }
 
     // 6g. Aufwachen
@@ -524,6 +590,7 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         spin(0.5)
         check("Aufwachen: Geraet ok -> keine neue Anstecksequenz", t.sent.count == n1)
         t.mixOut3 = DB.encode(-128)          // Geraet nach dem Ruhezustand zurueckgesetzt
+        t.resetDevice()                      // ... und hat alle Werte vergessen
         let n2 = t.sent.count
         c.checkAfterWake()
         spin(3.0, until: { t.sent.count > n2 + 100 })

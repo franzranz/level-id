@@ -12,7 +12,7 @@ private enum MonitorField: Sendable {
 }
 
 private enum DeviceEvent: Sendable {
-    case opened(passive: Bool, fading: Bool)
+    case opened(passive: Bool, fading: Bool, productID: UInt16)
     case openFailed
     case unresponsive
     case monitor(MonitorField)
@@ -29,7 +29,7 @@ struct DeviceTiming: Sendable {
     var openRetryMS = 500
     var readyIntervalMS = 100
     var readyTimeout = 10.0
-    var pushPauseUS: UInt32 = 10_000      // Pause zwischen SETs
+    var pushPauseUS: UInt32 = 30_000      // Pause zwischen SETs (bewusst grosszuegig; so lang war sie in der Praxis bisher)
     var notifyFastMS = 100                // iD-Taste auf Talkback oder Panel sichtbar
     var notifyActiveMS = 200              // Fade, Burst nach Meldung, Bereitschaft fertig
     var notifyIdleMS = 5000               // Leerlauf
@@ -37,6 +37,7 @@ struct DeviceTiming: Sendable {
     var wakeDelay = 3.0                   // Pruefung nach dem Aufwachen
     var meterMS = 50    // 20 Hz bei offenem Panel
     /// Ein Anstecken frueher als so viele Sekunden nach dem App-Start gilt als "Geraet war schon da" (kein echtes Einstecken).
+    /// Wird nur noch im Log vermerkt ("attach (frisch)"); der Push sendet ohnehin nur abweichende Werte.
     var freshPlugMinSeconds = 2.0
     static let standard = DeviceTiming()
 }
@@ -57,12 +58,16 @@ private final class USBWorker: @unchecked Sendable {
     private struct Flags {
         var generation = 0
         var passive = false
+        /// Profil des geoeffneten Geraets erlaubt SETs (SupportLevel.verified). Standard true = iD14-Verhalten.
+        var profileAllowsWrites = true
+        /// Schreibfreigabe fuer nicht gepruefte Profile (Controller.writeOverride)
+        var writeOverride = false
         var monitorFadeActive = false
         var phonesFadeActive = false
         var metering = false
         var talkbackKey = false
-        /// Echtes Einstecken: Das Geraet ist leer (alle Sends -128 dB), stumme Sends muessen nicht gesendet werden.
-        var freshPlug = false
+        /// Zeitpunkt des letzten attach (uptimeNanoseconds), fuer die Zeitangaben im Log.
+        var attachedAt: UInt64 = 0
     }
 
     private struct FadeRun {
@@ -130,7 +135,12 @@ private final class USBWorker: @unchecked Sendable {
         s?(e)
     }
 
-    private var isPassive: Bool { locked { $0.passive } }
+    /// Nur Original-iD laeuft (Passiv-Modus)
+    private var isAppPassive: Bool { locked { $0.passive } }
+    /// EINZIGE Schreibsperre des Workers: nur lesen, wenn die Original-iD laeuft ODER das Profil nicht
+    /// schreiben darf (readOnlyBeta) und kein Override gesetzt ist. Alles, was SETs ausloest, fragt hier.
+    private var isReadOnly: Bool { locked { Self.readOnly($0) } }
+    private static func readOnly(_ f: Flags) -> Bool { f.passive || !(f.profileAllowsWrites || f.writeOverride) }
     private func isCurrent(_ gen: Int) -> Bool { locked { $0.generation == gen } }
 
     // MARK: Von beliebigen Threads aufrufbar
@@ -146,6 +156,7 @@ private final class USBWorker: @unchecked Sendable {
     }
 
     func setPassiveFlag(_ p: Bool) { locked { $0.passive = p } }
+    func setWriteOverride(_ on: Bool) { locked { $0.writeOverride = on } }
 
     func setMetering(_ on: Bool) {
         locked { $0.metering = on }
@@ -192,12 +203,12 @@ private final class USBWorker: @unchecked Sendable {
         Diag.event(freshPlug ? "attach (frisch)" : "attach")
         let gen = locked { f -> Int in
             f.generation += 1
-            f.freshPlug = freshPlug
+            f.attachedAt = DispatchTime.now().uptimeNanoseconds
             f.monitorFadeActive = false
             f.phonesFadeActive = false
             return f.generation
         }
-        queue.asyncAfter(deadline: .now() + timing.attachDelay, qos: .userInitiated) { [self] in openAttempt(gen: gen, tries: 5) }
+        queue.asyncAfter(deadline: .now() + timing.attachDelay, qos: .userInitiated, flags: .enforceQoS) { [self] in openAttempt(gen: gen, tries: 5) }
     }
 
     /// Geraet abgezogen: Generation erhoehen (stoppt alte Fades sofort), Timer stoppen, schliessen.
@@ -227,13 +238,13 @@ private final class USBWorker: @unchecked Sendable {
 
     /// Wechsel passiv -> verbunden: aktuelle Lautstaerke lesen, vollen Zustand ohne Fade pushen.
     func leavePassiveWork() {
-        queue.async(qos: .userInitiated) { [self] in pushFullFromDevice(gen: locked { $0.generation }) }
+        queue.async(qos: .userInitiated, flags: .enforceQoS) { [self] in pushFullFromDevice(gen: locked { $0.generation }) }
     }
 
     /// Voller Push (z. B. nach Import), ohne Fade.
     func pushFull() {
         cancelFades(monitor: true, phones: true)
-        queue.async { [self] in
+        queue.async(qos: .userInitiated, flags: .enforceQoS) { [self] in
             stopFadeTimer()
             pushFullFromDevice(gen: locked { $0.generation })
         }
@@ -254,12 +265,15 @@ private final class USBWorker: @unchecked Sendable {
     private func openAttempt(gen: Int, tries: Int) {
         guard isCurrent(gen) else { return }
         if transport.open() {
+            // Profil aus der geoeffneten PID: unbekannte PID oder readOnlyBeta -> keine SETs (vor dem ersten Push)
+            let allows = DeviceProfile.forProductID(transport.openedProductID)?.allowsWrites ?? false
+            locked { $0.profileAllowsWrites = allows }
             log.info("Geraet geoeffnet, warte auf Bereitschaft")
             consecutiveErrors = 0
             let deadline = DispatchTime.now() + timing.readyTimeout
             readyStep(gen: gen, successes: 0, deadline: deadline)
         } else if tries > 1 {
-            queue.asyncAfter(deadline: .now() + .milliseconds(timing.openRetryMS)) { [self] in
+            queue.asyncAfter(deadline: .now() + .milliseconds(timing.openRetryMS), qos: .userInitiated, flags: .enforceQoS) { [self] in
                 openAttempt(gen: gen, tries: tries - 1)
             }
         } else {
@@ -279,76 +293,115 @@ private final class USBWorker: @unchecked Sendable {
             log.error("Geraet wird nicht bereit, gebe auf")
             abortConnection()
         } else {
-            queue.asyncAfter(deadline: .now() + .milliseconds(timing.readyIntervalMS)) { [self] in
+            queue.asyncAfter(deadline: .now() + .milliseconds(timing.readyIntervalMS), qos: .userInitiated, flags: .enforceQoS) { [self] in
                 readyStep(gen: gen, successes: n, deadline: deadline)
             }
         }
     }
 
     private func afterReady(gen: Int) {
-        Diag.event("bereit, Push startet (passiv=\(isPassive))")
+        Diag.event("bereit nach \(msSinceAttach()) ms, Push startet (passiv=\(isAppPassive), nurLesen=\(isReadOnly))")
         guard isCurrent(gen), transport.isOpen else { return }
-        var passive = isPassive      // erst jetzt lesen: iD kann waehrend der Wartezeit gestartet sein
+        var passive = isAppPassive   // erst jetzt lesen: iD kann waehrend der Wartezeit gestartet sein
         var fading = false
-        if !passive {
+        if !isReadOnly {
             let s = stateBox.get()
-            var plan = PushPlan.fullState(s, monitorVolumeDB: DB.minimum, phonesLevelDB: nil,
+            let plan = PushPlan.fullState(s, monitorVolumeDB: DB.minimum, phonesLevelDB: nil,
                                           phonesVolumeDB: DB.minimum)
-            if locked({ $0.freshPlug }) { plan = skippingSilentSends(plan) }
             switch push(plan, gen: gen) {
             case .ok: fading = beginFade(s)
-            case .aborted: if !isCurrent(gen) { return }; passive = true
+            case .aborted: if !isCurrent(gen) { return }; passive = isAppPassive
             case .failed: return
             }
         }
-        emit(.opened(passive: passive, fading: fading))
+        Diag.event("Lautstaerke startet nach \(msSinceAttach()) ms ab attach")
+        emit(.opened(passive: passive, fading: fading, productID: transport.openedProductID))
         startBurst()   // Bereitschaft/Push fertig: erstmal 200 ms
         // Timer erst nach erfolgreichem Push bzw. nach der Bereitschaftspruefung (Passiv)
         startNotifyTimer()
         updateMeterTimer()
-        if passive { refreshMonitor() }
+        if isReadOnly { refreshMonitor() }   // nur lesen (iD laeuft oder readOnlyBeta): Monitor-Werte einmal holen
     }
 
-    /// Nach einem echten Einstecken steht jeder Mixer-Send auf -128 dB, ausser Mic 1 -> Ausgang 1 und Mic 2 -> Ausgang 2
-    /// (Firmware-Standard 0 dB, am Geraet gemessen). Stumme Sends muessen dann nicht gesendet werden (spart rund 80
-    /// von 135 Befehlen); die beiden Ausnahmen werden immer gesendet. Vorher werden sechs der uebersprungenen Sends
-    /// gelesen; stimmt eines nicht, wird alles gesendet.
-    private func skippingSilentSends(_ plan: [SetCommand]) -> [SetCommand] {
-        let sendUnit = ID14.mixerSend(input: 0, output: 0).unit
-        let deviceDefaultAudible = [ID14.mixerSend(input: 0, output: 0), ID14.mixerSend(input: 1, output: 1)]
-        func isSkippable(_ c: SetCommand) -> Bool {
-            c.control.unit == sendUnit && !deviceDefaultAudible.contains(c.control)
-                && c.data.count >= 2 && DB.decode(c.data) <= DB.minimum + 0.01
+    /// Millisekunden seit dem letzten attach (fuer das Log).
+    private func msSinceAttach() -> Int {
+        let t = locked { $0.attachedAt }
+        return Int((DispatchTime.now().uptimeNanoseconds &- t) / 1_000_000)
+    }
+
+    /// Diff-Push: liest je Control den aktuellen Wert (GET ~0,1 ms, SET ~25-35 ms) und behaelt nur Befehle, die vom
+    /// Geraetewert abweichen. Gelesen wird direkt am Transport, damit ein nicht lesbares Control nicht zur
+    /// Gesundheitsregel (3 Fehler in Folge) zaehlt. Nicht lesbar, anderer Wert oder Control mehrfach im Plan: senden.
+    private func differing(_ plan: [SetCommand]) -> (send: [SetCommand], unchanged: Int, readMS: Double) {
+        let t0 = DispatchTime.now().uptimeNanoseconds
+        var seen: [ID14.Control: [UInt8]] = [:]
+        let r = PushPlan.differing(plan) { c in
+            let b = transport.getCur(c)
+            if let b { seen[c] = b }
+            return b
         }
-        let silent = plan.filter(isSkippable)
-        guard silent.count >= 12 else { return plan }
-        let n = silent.count
-        for c in [silent[0], silent[n / 5], silent[2 * n / 5], silent[3 * n / 5], silent[4 * n / 5], silent[n - 1]] {
-            guard let b = cur(c.control), b.count >= 2, DB.decode(b) <= DB.minimum + 0.01 else {
-                Diag.event("Push: Sends nicht auf -128 dB, sende alles")
-                return plan
-            }
+        let ms = Double(DispatchTime.now().uptimeNanoseconds &- t0) / 1_000_000
+        // Diagnose: einige abweichende Werte samt Geraetewert ins Log
+        if !r.send.isEmpty {
+            let hex: ([UInt8]) -> String = { $0.map { String(format: "%02x", $0) }.joined(separator: " ") }
+            let sample = r.send.prefix(6).map { c in "\(c.description) geraet=[\(seen[c.control].map(hex) ?? "nil")]" }
+            Diag.event("Push-Diff Beispiele: " + sample.joined(separator: " | "))
         }
-        let kept = plan.filter { !isSkippable($0) }
-        Diag.event("Push: \(plan.count - kept.count) stumme Sends uebersprungen")
-        return kept
+        return (r.send, r.unchanged, ms)
     }
 
     private enum PushResult { case ok, aborted, failed }
 
-    /// Gedrosselter Push: 5 ms Pause je SET, alle 16 Befehle ein Kontroll-GET. Bei Fehler sofort Schluss.
-    private func push(_ cmds: [SetCommand], gen: Int) -> PushResult {
-        for (n, c) in cmds.enumerated() {
+    /// Diff-Push mit Drossel: Erst werden die aktuellen Geraetewerte gelesen und nur abweichende Befehle gesendet.
+    /// Diese gehen gedrosselt raus (`timing.pushPauseUS` Pause je SET, alle `pushCheckEvery` gesendeten Befehle ein
+    /// Kontroll-GET). Bei Fehler sofort Schluss. Am Ende steht eine Zeitzeile im Log.
+    private func push(_ planned: [SetCommand], gen: Int) -> PushResult {
+        guard isCurrent(gen), transport.isOpen else { return .aborted }
+        if isReadOnly { return .aborted }
+        // Ohne das dehnt macOS die kurzen Pausen einer Hintergrund-App (App Nap/Timer-Buendelung) auf ein Mehrfaches.
+        let activity = ProcessInfo.processInfo.beginActivity(options: [.userInitiated, .latencyCritical],
+                                                             reason: "Zustand ans Geraet senden")
+        defer { ProcessInfo.processInfo.endActivity(activity) }
+        let tStart = DispatchTime.now().uptimeNanoseconds
+        let d = differing(planned)
+        var sent = 0
+        var totalSetNS: UInt64 = 0
+        var maxSetNS: UInt64 = 0
+        var maxDesc = ""
+        var pauseNS: UInt64 = 0
+        func summary() {
+            var line = "Push: \(sent) von \(planned.count) gesendet (\(d.unchanged) unveraendert), "
+                + "Lesen \(String(format: "%.0f", d.readMS)) ms"
+            if sent > 0 {
+                line += ", SET avg \(String(format: "%.1f", Double(totalSetNS) / Double(sent) / 1_000_000)) ms"
+                    + ", max \(String(format: "%.1f", Double(maxSetNS) / 1_000_000)) ms (\(maxDesc))"
+                    + ", Pause avg \(String(format: "%.1f", Double(pauseNS) / Double(sent) / 1_000_000)) ms"
+            }
+            let total = Double(DispatchTime.now().uptimeNanoseconds &- tStart) / 1_000_000_000
+            line += ", gesamt \(String(format: "%.2f", total)) s"
+            Diag.event(line)
+        }
+        for c in d.send {
             guard isCurrent(gen), transport.isOpen else { return .aborted }
-            if isPassive { return .aborted }
-            if !sendNow(c) {
+            if isReadOnly { return .aborted }
+            let t0 = DispatchTime.now().uptimeNanoseconds
+            let ok = sendNow(c)
+            let dt = DispatchTime.now().uptimeNanoseconds &- t0
+            if !ok {
                 guard transport.isOpen else { return .aborted }   // schon durch Gesundheitsregel geschlossen
                 log.error("Push abgebrochen: SET fehlgeschlagen bei \(c.description, privacy: .public)")
                 abortConnection()
                 return .failed
             }
-            if timing.pushPauseUS > 0 { usleep(timing.pushPauseUS) }
-            if (n + 1) % Self.pushCheckEvery == 0 {
+            sent += 1
+            totalSetNS &+= dt
+            if dt > maxSetNS { maxSetNS = dt; maxDesc = c.description }
+            if timing.pushPauseUS > 0 {
+                let p0 = DispatchTime.now().uptimeNanoseconds
+                usleep(timing.pushPauseUS)
+                pauseNS &+= DispatchTime.now().uptimeNanoseconds &- p0
+            }
+            if sent % Self.pushCheckEvery == 0 {
                 guard isCurrent(gen), transport.isOpen else { return .aborted }
                 if cur(ID14.Monitor.volume) == nil {
                     guard transport.isOpen else { return .aborted }
@@ -358,6 +411,7 @@ private final class USBWorker: @unchecked Sendable {
                 }
             }
         }
+        summary()
         return .ok
     }
 
@@ -391,7 +445,7 @@ private final class USBWorker: @unchecked Sendable {
     }
 
     private func pushFullFromDevice(gen: Int) {
-        guard isCurrent(gen), transport.isOpen, !isPassive else { return }
+        guard isCurrent(gen), transport.isOpen, !isReadOnly else { return }
         let s = stateBox.get()
         var vol: Double? = nil
         if let b = cur(ID14.Monitor.volume), b.count >= 2 {
@@ -403,10 +457,11 @@ private final class USBWorker: @unchecked Sendable {
         _ = push(PushPlan.fullState(s, monitorVolumeDB: vol, phonesLevelDB: nil, phonesVolumeDB: nil), gen: gen)
     }
 
-    /// Einzelnes SET. Prueft Passiv-Flag und Transportzustand; Whitelist prueft der Transport.
+    /// Einzelnes SET = ENGPASS fuer alle Schreibzugriffe (Push, Flush, Fade). Prueft die Schreibsperre
+    /// (Passiv oder readOnlyBeta) und den Transportzustand; die Whitelist prueft der Transport.
     @discardableResult
     private func sendNow(_ cmd: SetCommand) -> Bool {
-        guard !isPassive, transport.isOpen else { return false }
+        guard !isReadOnly, transport.isOpen else { return false }
         let ok = transport.set(cmd)
         lastSent[cmd.control] = .now()
         if !ok { log.error("SET fehlgeschlagen: \(cmd.description, privacy: .public)") }
@@ -417,7 +472,7 @@ private final class USBWorker: @unchecked Sendable {
     /// Gedrosselt senden: je Control hoechstens alle ~16 ms, juengster Wert gewinnt.
     private func flush() {
         guard !pending.isEmpty else { return }
-        if isPassive || !transport.isOpen {
+        if isReadOnly || !transport.isOpen {
             pending.removeAll(); pendingOrder.removeAll()
             return
         }
@@ -647,7 +702,7 @@ private final class USBWorker: @unchecked Sendable {
 
     private func fadeStep() {
         guard var f = fade else { stopFadeTimer(); return }
-        let (passive, mActive, pActive) = locked { ($0.passive, $0.monitorFadeActive, $0.phonesFadeActive) }
+        let (passive, mActive, pActive) = locked { (Self.readOnly($0), $0.monitorFadeActive, $0.phonesFadeActive) }
         guard transport.isOpen, !passive else { stopFadeTimer(); return }
         defer { if !transport.isOpen { stopFadeTimer() } }
 
@@ -704,6 +759,20 @@ final class DeviceController: ObservableObject {
     /// Meter werden nur ueber dieses Objekt veroeffentlicht (nicht ueber den Controller).
     let meters = MeterModel()
     @Published private(set) var isFading = false
+    /// Zuletzt verbundenes Geraet (bis zum ersten Anstecken: iD14 MkII)
+    @Published private(set) var profile: DeviceProfile = .id14mk2
+    /// Schreibfreigabe fuer nicht gepruefte Profile (bisher nur in Tests genutzt, keine UI). Nicht gespeichert.
+    var writeOverride = false {
+        didSet {
+            guard oldValue != writeOverride else { return }
+            worker.setWriteOverride(writeOverride)
+            objectWillChange.send()
+            // Schreiben jetzt erlaubt, Geraet verbunden: vollen Zustand ohne Fade pushen
+            if writeOverride, connection == .connected { worker.leavePassiveWork() }
+        }
+    }
+    /// Geraet laeuft nur lesend, weil sein Profil (readOnlyBeta) keine SETs erlaubt. Unabhaengig von `connection == .passive`.
+    var readOnlyBeta: Bool { !(profile.allowsWrites || writeOverride) }
     /// Kopfhoerer-Regler am Geraet bewegt (Wert nicht lesbar) – App-Wert evtl. veraltet
     @Published private(set) var phonesChangedOnDevice = false
 
@@ -747,6 +816,8 @@ final class DeviceController: ObservableObject {
         initial.monitor.talkback = false   // Laufzeitwert, nach Neustart immer aus
         state = initial
         stateBox = StateBox(initial)
+        meters.peakHoldSeconds = initial.ui.peakHoldSeconds
+        meters.levelReadout = initial.ui.levelReadout
         worker = USBWorker(transport: transport, stateBox: stateBox, timing: timing)
         worker.setTalkbackKey(initial.monitor.needsFastNotify)
         worker.setSink { event in
@@ -863,7 +934,7 @@ final class DeviceController: ObservableObject {
             guard !deviceAttached else { return }
             deviceAttached = true
             worker.setPassiveFlag(originalAppRunning)
-            // Frisch eingesteckt (nicht schon beim App-Start da): Geraet ist leer, stumme Sends koennen entfallen
+            // Nur fuers Log: frisch eingesteckt oder schon beim App-Start da (der Push sendet in beiden Faellen nur Abweichungen)
             let fresh = ProcessInfo.processInfo.systemUptime - startedAt > timing.freshPlugMinSeconds
             worker.attach(freshPlug: fresh)
         } else {
@@ -881,7 +952,10 @@ final class DeviceController: ObservableObject {
     private func handle(_ event: DeviceEvent) {
         guard deviceAttached else { return }
         switch event {
-        case let .opened(passive, fading):
+        case let .opened(passive, fading, productID):
+            // Unbekannte PID (kann ueber das Matching nicht vorkommen): wie iD14 anzeigen, Worker sendet nichts
+            profile = DeviceProfile.forProductID(productID) ?? profile
+            meters.configure(channelCount: profile.preampCount)
             connection = passive ? .passive : .connected
             isFading = fading && !passive
             meters.reset()   // nach dem Anstecken neu hochfahren (Ausreisser am Anfang begrenzen)
@@ -976,9 +1050,10 @@ final class DeviceController: ObservableObject {
 
     // MARK: Setter
 
-    /// Im Passiv-Modus wird nichts geaendert und nichts gesendet.
-    private var writable: Bool { connection != .passive }
-    private var live: Bool { connection == .connected }
+    /// Im Passiv-Modus und bei readOnlyBeta wird nichts geaendert und nichts gesendet (Setter sind No-Ops;
+    /// der Zustand spiegelt dort nur das Geraet). Der Worker sperrt unabhaengig davon (isReadOnly).
+    private var writable: Bool { connection != .passive && !readOnlyBeta }
+    private var live: Bool { connection == .connected && !readOnlyBeta }
 
     private func clampVolume(_ db: Double) -> Double { min(max(db, DB.minimum), 0) }
 
@@ -1016,6 +1091,17 @@ final class DeviceController: ObservableObject {
         commit(ID14.phonesVolumeChannels.map {
             SetCommand(control: ID14.phonesVolume(channel: $0), data: DB.encode(v))
         })
+    }
+
+    /// Zweiter Kopfhoerer (iD44): NUR lokaler Zustand, kein USB-Befehl (Control unbekannt). UI folgt spaeter.
+    func setPhones2Volume(_ db: Double) {
+        state.phones2VolumeDB = clampVolume(db)
+        store.scheduleSave(state)
+    }
+
+    func setPhones2Cut(_ on: Bool) {
+        state.monitor.phones2Cut = on
+        store.scheduleSave(state)
     }
 
     func nudgePhonesVolume(by deltaDB: Double) { setPhonesVolume(state.phonesVolumeDB + deltaDB) }
@@ -1213,6 +1299,21 @@ final class DeviceController: ObservableObject {
         store.scheduleSave(state)
     }
 
+    /// Peak-Haltezeit der Eingangsmeter (2, 4, 6 s oder 0 = unendlich), App-Einstellung ohne USB.
+    func setPeakHold(_ seconds: Double) {
+        guard UIPreferences.peakHoldChoices.contains(seconds) else { return }
+        state.ui.peakHold = seconds
+        meters.peakHoldSeconds = state.ui.peakHoldSeconds
+        store.scheduleSave(state)
+    }
+
+    /// Anzeige der kleinen Pegelzahl (RMS oder PPM), App-Einstellung ohne USB.
+    func setLevelReadout(_ r: UIPreferences.LevelReadout) {
+        state.ui.levelReadout = r
+        meters.levelReadout = r
+        store.scheduleSave(state)
+    }
+
     func setVolumeKeys(_ on: Bool) {
         state.ui.volumeKeys = on
         store.scheduleSave(state)
@@ -1263,6 +1364,13 @@ final class DeviceController: ObservableObject {
     }
 
     /// iD-Taste aus Sicht des UI (inkl. Mix-Regler, der geraeteseitig auf Mono liegt).
+    /// Funktionstaste F1-F3 (iD24/iD44): NUR lokaler Zustand, kein USB-Befehl (Mehrtasten-Protokoll unbekannt).
+    func setFunctionKey(_ index: Int, _ f: IDKeyFunction) {
+        guard profile.functionKeyCount > 1, profile.functionKeyModes.contains(f) else { return }
+        state.monitor.setFunctionKey(index, f)
+        store.scheduleSave(state)
+    }
+
     func setIDKeyChoice(_ c: IDKeyChoice) {
         guard writable else { return }
         applyIDKey(c.deviceFunction)

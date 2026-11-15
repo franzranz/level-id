@@ -3,6 +3,8 @@ import SwiftUI
 
 struct CueMixSection: View {
     @ObservedObject var controller: DeviceController
+    /// Blend-Regler gesperrt (nicht ansprechbar / Beta nur lesend). Das Aufklappen bleibt immer moeglich.
+    var locked = false
     /// Inhalt sichtbar? Umschalten ohne Animation, damit oberhalb nichts springt.
     @State private var expanded = false
     /// Nur für das Chevron: dreht sich mit kurzer Animation.
@@ -37,6 +39,7 @@ struct CueMixSection: View {
                     CueBlendRow(controller: controller, mix: 0, title: "Monitor")
                     CueBlendRow(controller: controller, mix: 1, title: "Headphones")
                 }
+                .disabled(locked)
                 .padding(.top, 2)
             }
         }

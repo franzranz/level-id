@@ -84,6 +84,26 @@ func runSends() {
     print("stumm \(silent), nicht stumm \(loud), nicht lesbar \(failed)")
 }
 
+/// Nur lesend: vergleicht den Push-Plan aus dem App-Zustand mit den Geraetewerten.
+func runDiff() {
+    let url = FileManager.default.homeDirectoryForCurrentUser
+        .appendingPathComponent("Library/Application Support/ID14Control/state.json")
+    guard let s = StateStore(url: url).load() else { fail("state.json nicht lesbar") }
+    let plan = PushPlan.fullState(s)
+    let t = openTransport()
+    defer { t.close() }
+    var diff = 0
+    for c in plan {
+        let b = t.getCur(c.control)
+        if b != c.data {
+            diff += 1
+            let got = b.map { $0.map { String(format: "%02x", $0) }.joined(separator: " ") } ?? "nil"
+            print("\(c.description)  geraet=[\(got)]")
+        }
+    }
+    print("\(diff) von \(plan.count) abweichend (nur gelesen, nichts gesendet)")
+}
+
 func runPlan() {
     do {
         let state = try IDStateImporter.load(from: IDStateImporter.defaultURL)
@@ -104,6 +124,7 @@ struct ID14Ctl {
         case "meters": runMeters()
         case "plan": runPlan()
         case "sends": runSends()
+        case "diff": runDiff()
         default: fail("Aufruf: id14ctl status | meters | plan | sends", 2)
         }
     }

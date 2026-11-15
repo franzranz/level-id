@@ -6,13 +6,19 @@ final class USBTransport: DeviceTransport {
     private let timeoutMS: UInt32 = 500
 
     var isOpen: Bool { dev != nil }
+    /// PID des geoeffneten Geraets (vor dem ersten erfolgreichen open: iD14-PID)
+    private(set) var openedProductID: UInt16 = ID14.productID
 
     init() {}
     deinit { close() }
 
     func open() -> Bool {
         if dev != nil { return true }
-        dev = cusb_open(ID14.vendorID, ID14.productID)
+        // Alle Profil-PIDs (iD14 zuerst); bei nur angestecktem iD14 identisch zum bisherigen Matching.
+        let pids = DeviceProfile.all.map(\.productID)
+        var pid: UInt16 = 0
+        dev = pids.withUnsafeBufferPointer { cusb_open(ID14.vendorID, $0.baseAddress, Int32($0.count), &pid) }
+        if dev != nil { openedProductID = pid }
         return dev != nil
     }
 
@@ -66,10 +72,13 @@ final class USBTransport: DeviceTransport {
     static func watch(onChange: @escaping (Bool) -> Void) {
         // Box bleibt absichtlich für die Prozesslaufzeit retained (C-Seite hält nur den rohen Zeiger).
         let ctx = Unmanaged.passRetained(WatchBox(onChange)).toOpaque()
-        let rc = cusb_watch(ID14.vendorID, ID14.productID, { ctx, attached in
-            guard let ctx = ctx else { return }
-            Unmanaged<WatchBox>.fromOpaque(ctx).takeUnretainedValue().onChange(attached != 0)
-        }, ctx)
+        let pids = DeviceProfile.all.map(\.productID)
+        let rc = pids.withUnsafeBufferPointer { p in
+            cusb_watch(ID14.vendorID, p.baseAddress, Int32(p.count), { ctx, attached in
+                guard let ctx = ctx else { return }
+                Unmanaged<WatchBox>.fromOpaque(ctx).takeUnretainedValue().onChange(attached != 0)
+            }, ctx)
+        }
         if rc != 0 { Unmanaged<WatchBox>.fromOpaque(ctx).release() }
     }
 }
@@ -93,6 +102,7 @@ enum Diag {
     private static let lock = NSLock()
     private static let maxBytes: UInt64 = 512 * 1024
     static let url = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Logs/ID14Control.log")
+    private static let linePrefix = ""
 
     /// Heisser Pfad: nur Struct kopieren, kein Allozieren, kein Formatieren.
     static func record(_ e: Entry) {
@@ -115,7 +125,7 @@ enum Diag {
     }
 
     static func event(_ text: String) {
-        append(["\(clock(DispatchTime.now().uptimeNanoseconds)) EVENT \(text)"])
+        append(["\(linePrefix)\(clock(DispatchTime.now().uptimeNanoseconds)) EVENT \(text)"])
     }
 
     // MARK: Formatieren (nur bei Fehler/Ereignis)

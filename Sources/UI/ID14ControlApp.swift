@@ -40,6 +40,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         if let c = AppContext.controller {
             statusController = StatusItemController(controller: c)
             // Standardmaessig aus: der Tap entsteht erst, wenn "Use Mac volume keys" an ist
+            // Dev-Build: kein Medientasten-Tap (koennte die installierte App stoeren)
             mediaKeyTap = MediaKeyTap(controller: c, hud: VolumeHUD())
         }
     }

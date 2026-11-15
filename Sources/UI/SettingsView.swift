@@ -5,12 +5,14 @@ import SwiftUI
 struct SettingsView: View {
     @ObservedObject var controller: DeviceController
     @State private var launchAtLogin = false
+    @State private var showVerify = false
 
     var body: some View {
         let state = controller.state
         VStack(alignment: .leading, spacing: 14) {
             Text("Settings")
                 .font(.headline)
+
 
             group("App") {
                 Toggle("Launch at login", isOn: Binding(
@@ -61,6 +63,46 @@ struct SettingsView: View {
                 .help(state.restore.rememberVolume ? "" : "Turn on “Remember volume” to use this.")
             }
 
+            group("Input meters") {
+                HStack {
+                    Text("Peak hold")
+                    Spacer()
+                    Picker("Peak hold", selection: Binding(
+                        get: { state.ui.peakHold },
+                        set: { controller.setPeakHold($0) })) {
+                        Text("2 s").tag(2.0)
+                        Text("4 s").tag(4.0)
+                        Text("6 s").tag(6.0)
+                        Text("∞").tag(0.0)
+                    }
+                    .pickerStyle(.menu)
+                    .labelsHidden()
+                }
+                .help("How long the peak value and peak line stay up before they follow the level again. ∞ keeps the highest peak until you click the number.")
+            }
+
+            if controller.profile.functionKeyCount > 1 {
+                // Mehrtasten-Geraete (iD24/iD44): Belegung nur lokal gespeichert, kein USB-Befehl (Protokoll unbekannt)
+                group("Function keys") {
+                    ForEach(0..<controller.profile.functionKeyCount, id: \.self) { i in
+                        HStack {
+                            Text(controller.profile.functionKeyNames[i])
+                            Spacer()
+                            Picker(controller.profile.functionKeyNames[i], selection: Binding(
+                                get: { state.monitor.functionKey(i) },
+                                set: { controller.setFunctionKey(i, $0) })) {
+                                ForEach(controller.profile.functionKeyModes, id: \.self) { Text($0.title).tag($0) }
+                            }
+                            .pickerStyle(.menu)
+                            .labelsHidden()
+                        }
+                    }
+                    Text("Saved in the app only for now; not sent to the interface.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
             group("Device") {
                 HStack {
                     Text("iD button")
@@ -111,9 +153,24 @@ struct SettingsView: View {
                     }
                 }
             }
-            .disabled(controller.connection == .passive || controller.connection == .unresponsive)
+            .disabled(controller.connection == .passive || controller.connection == .unresponsive || controller.readOnlyBeta)
             .help(controller.connection == .passive ? "Not available while the original iD app is running."
+                  : controller.readOnlyBeta ? "Not available until this device is verified (read-only)."
                   : controller.connection == .unresponsive ? "Not available while the ID14 is not responding." : "")
+            }
+
+            // Nur bei Beta-Geraeten (readOnlyBeta): Hinweis und Pruefliste fuer die Rueckmeldung
+            if controller.readOnlyBeta {
+                group("Device support") {
+                    Text(controller.profile.supportLevel == .unverified
+                         ? "This \(controller.profile.name) is unverified and runs read-only until an owner confirms it."
+                         : "This \(controller.profile.name) runs in read-only beta.")
+                        .font(.caption)
+                        .fixedSize(horizontal: false, vertical: true)
+                    Button("Help verify this device…") { showVerify = true }
+                        .help("Checks the controls you use and prepares a report you can paste into a GitHub issue. Nothing is sent automatically.")
+                }
+            }
 
             // Eigene Gruppe: Toggle und Berechtigung bleiben auch im Passiv-Modus bedienbar (reine App-Einstellung)
             group("Mac volume keys") {
@@ -142,6 +199,9 @@ struct SettingsView: View {
         .frame(width: 260)
         .onAppear {
             launchAtLogin = SingleInstance.loginEnabled
+        }
+        .sheet(isPresented: $showVerify) {
+            DeviceVerifyView(controller: controller)
         }
     }
 

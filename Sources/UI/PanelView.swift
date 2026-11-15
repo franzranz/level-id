@@ -11,11 +11,13 @@ struct PanelView: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             VStack(alignment: .leading, spacing: 2) {
-                Text("Audient ID14")
-                    .font(.subheadline.weight(.semibold))
-                    .foregroundStyle(.secondary)
+                HStack(spacing: 6) {
+                    Text(controller.profile == .id14mk2 ? "Audient ID14" : "Audient \(controller.profile.name)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(.secondary)
+                }
                 // Status nur bei Abweichungen vom Normalfall (verbunden)
-                if controller.connection == .disconnected || controller.connection == .passive {
+                if controller.connection == .disconnected || controller.connection == .passive || betaReadOnlyShown {
                     statusLine
                 }
             }
@@ -28,12 +30,14 @@ struct PanelView: View {
             }
             if controller.connection != .disconnected {
                 MonitorSection(controller: controller, onOpenSettings: { showSettings = true })
-                    .disabled(isUnresponsive)
+                    .disabled(isUnresponsive || controller.readOnlyBeta)
                 Divider()
                 InputsSection(controller: controller, meters: controller.meters)
-                Divider()
-                CueMixSection(controller: controller)
-                    .disabled(isUnresponsive)
+                if controller.profile.showsCueMix {
+                    Divider()
+                    // Sperre sitzt IN der Sektion: das Aufklappen muss auch bei nicht geprueften Geraeten gehen
+                    CueMixSection(controller: controller, locked: isUnresponsive || controller.readOnlyBeta)
+                }
             }
             footer
         }
@@ -42,7 +46,15 @@ struct PanelView: View {
         .padding(.top, 14)
         .padding(.bottom, 7.5)
         .frame(width: 320)
+        // Nach dem Schliessen der Settings (SwiftUI baut den Inhalt selbst ab) freien Speicher zurueckgeben;
+        // ~1 s Verzoegerung, damit die Schliessen-Animation fertig ist
+        .onChange(of: showSettings) { _, isShown in
+            if !isShown { MemoryRelief.relieve(after: 1) }
+        }
     }
+
+    /// Nicht geprueftes Geraet verbunden: Status-Zeile "iD24 · unverified (read-only)" bzw. "iD44 · beta (read-only)". Passiv (Original-iD) hat Vorrang.
+    private var betaReadOnlyShown: Bool { controller.connection == .connected && controller.readOnlyBeta }
 
     private var statusLine: some View {
         Label(statusText, systemImage: statusIcon)
@@ -62,7 +74,7 @@ struct PanelView: View {
     private var statusText: String {
         switch controller.connection {
         case .disconnected: return "ID14 not connected"
-        case .connected: return "Connected"
+        case .connected: return betaReadOnlyShown ? "\(controller.profile.name) · \(controller.profile.statusLabel ?? "beta") (read-only)" : "Connected"
         case .passive: return "Original iD is running – read-only"
         case .unresponsive: return "Not responding"
         }

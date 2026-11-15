@@ -65,9 +65,11 @@ enum SingleInstance {
         if wasOn, !loginEnabled { _ = writeAgentPlist() }
     }
 
+    private static let lockPath = "Library/Application Support/ID14Control/instance.lock"
+
     private static func lockURL() -> URL {
         FileManager.default.homeDirectoryForCurrentUser
-            .appendingPathComponent("Library/Application Support/ID14Control/instance.lock")
+            .appendingPathComponent(lockPath)
     }
 
     /// flock(LOCK_EX | LOCK_NB), alle 200 ms erneut bis zum Timeout. FD bleibt offen (Prozesslaufzeit).

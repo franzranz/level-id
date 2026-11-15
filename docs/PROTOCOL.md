@@ -74,3 +74,17 @@ Function key mode values equal the CS number of the function: `0x00` Mono, `0x04
 ## Not available over USB
 - LED meter source and knob step size.
 - Gain, 48 V, Hi-Z state.
+
+## Other iD models (derived from the iD app, not verified on hardware)
+
+| Model | USB PID | Preamps | Headphone outputs | Optical in/out |
+|---|---|---|---|---|
+| iD24 | 0x000D | 2 | 1 (two jacks, same mix) | 1/1 |
+| iD44 | 0x0005 | 4 | 2 independent | 2/2 |
+| iD44 MkII | 0x000B | 4 | 2 independent | 2/2 |
+| iD4 MkII | 0x0009 | 2 | 1 | – |
+
+- In the iD app, iD24/iD44/iD44 MkII have a monitor section and default monitor and headphone volume to −128 dB after plug-in, like the iD14 MkII, so the host must restore the volume.
+- The iD4 MkII has no monitor section in the iD app (its monitor-section builder returns null) and no function-key definition; Level iD does not support it.
+- Unit IDs are discovered by the iD app at runtime from the USB descriptor, so they are not in the product definitions. Level iD assumes the iD14 MkII units until owner reports confirm them; until then these models are read-only.
+- How the iD44's second headphone output is controlled is not known yet.

@@ -51,6 +51,7 @@ struct MonitorSection: View {
 
     var body: some View {
         let state = controller.state
+        let dual = controller.profile.headphoneCount == 2
         VStack(alignment: .leading, spacing: 14) {
             LevelRow(title: "Monitor",
                      value: state.monitor.volumeDB,
@@ -66,7 +67,7 @@ struct MonitorSection: View {
                      titleHelp: state.monitor.speakerSelect == 1
                         ? "Volume of monitor speaker pair 2: Output 3 (left) and Output 4 (right) on the rear of the interface. Scroll to change in 1 dB steps; hold Shift for 0.1 dB steps."
                         : "Volume of monitor speaker pair 1: Output 1 (left) and Output 2 (right) on the rear of the interface. Scroll to change in 1 dB steps; hold Shift for 0.1 dB steps.")
-            LevelRow(title: "Headphones",
+            LevelRow(title: dual ? "Headphones 1" : "Headphones",
                      value: state.phonesVolumeDB,
                      onSet: { controller.setPhonesVolume($0) },
                      isMuted: state.monitor.phonesCut,
@@ -75,8 +76,18 @@ struct MonitorSection: View {
                      badges: [
                          state.monitor.talkback ? Badge(text: "Talkback", color: Color.orange.opacity(0.25)) : nil,
                      ].compactMap { $0 },
-                     accessory: AnyView(HeadphonesInfoButton()),
-                     titleHelp: "Volume of the headphone output. Both headphone jacks share this volume and cannot be controlled separately. Scroll to change in 1 dB steps; hold Shift for 0.1 dB steps.")
+                     accessory: dual ? nil : AnyView(HeadphonesInfoButton()),
+                     titleHelp: dual
+                        ? "Volume of headphone output 1. Scroll to change in 1 dB steps; hold Shift for 0.1 dB steps."
+                        : "Volume of the headphone output. Both headphone jacks share this volume and cannot be controlled separately. Scroll to change in 1 dB steps; hold Shift for 0.1 dB steps.")
+            if dual {
+                LevelRow(title: "Headphones 2",
+                         value: state.phones2VolumeDB,
+                         onSet: { controller.setPhones2Volume($0) },
+                         isMuted: state.monitor.phones2Cut,
+                         onToggleMute: { controller.setPhones2Cut(!state.monitor.phones2Cut) },
+                         titleHelp: "Second headphone output (iD44). Control is local only until this device is verified.")
+            }
         }
     }
 }

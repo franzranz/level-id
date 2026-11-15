@@ -20,9 +20,15 @@ enum MeterScale {
         return min(max(pct / 100, 0), 1)
     }
 
-    /// Zielzonen: < -18 unter Ziel, -18...-6 Ziel, -6...-3 heiss, > -3 Gefahr.
-    static func zone(_ db: Double) -> Zone {
-        if db < -18 { return .below }
+    /// Untergrenze der Zielzone: RMS-Modus -18, PPM-Modus (Podcast) -12.
+    static func targetFloor(ppm: Bool) -> Double { ppm ? -12 : -18 }
+
+    /// Bezugsmarke: RMS-Modus -18, PPM-Modus -10 (BBC: normale Sprachspitzen ca. PPM 6 = -10 dBFS).
+    static func marker(ppm: Bool) -> Double { ppm ? -10 : -18 }
+
+    /// Zielzonen: unter Zielgrenze (-18, PPM -12) unter Ziel, bis -6 Ziel, -6...-3 heiss, > -3 Gefahr.
+    static func zone(_ db: Double, ppm: Bool = false) -> Zone {
+        if db < targetFloor(ppm: ppm) { return .below }
         if db < -6 { return .target }
         if db <= -3 { return .hot }
         return .danger

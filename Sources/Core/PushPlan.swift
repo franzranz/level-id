@@ -70,6 +70,38 @@ enum PushPlan {
         return cmds
     }
 
+    /// Diff gegen den Geraetezustand: behaelt Befehle, deren Controlwert nicht gelesen werden konnte (nil), vom Plan
+    /// abweicht oder deren Control mehrfach im Plan steht (dann gehen alle Vorkommen in Originalreihenfolge raus).
+    /// Jedes Control wird hoechstens einmal gelesen.
+    static func differing(_ plan: [SetCommand], read: (ID14.Control) -> [UInt8]?)
+        -> (send: [SetCommand], unchanged: Int) {
+        var count: [ID14.Control: Int] = [:]
+        for c in plan { count[c.control, default: 0] += 1 }
+        var cache: [ID14.Control: [UInt8]?] = [:]
+        var send: [SetCommand] = []
+        var unchanged = 0
+        for c in plan {
+            let dup = (count[c.control] ?? 0) > 1
+            var curValue: [UInt8]?
+            if let known = cache[c.control] { curValue = known } else {
+                curValue = read(c.control)
+                cache[c.control] = .some(curValue)
+            }
+            if dup || curValue == nil || !equivalent(c, curValue!) { send.append(c) } else { unchanged += 1 }
+        }
+        return (send, unchanged)
+    }
+
+    /// Gleich im Sinne des Diff-Push: exakt dieselben Bytes, oder bei Mixer-Sends beide stumm (<= -128 dB).
+    /// Die Firmware meldet stumme Sends nach dem Einstecken mit anderen Bytes als 0x8000; beides ist Stille
+    /// (frueher bereits per Stichprobe als -128 dB erkannt und uebersprungen, ohne Probleme).
+    static func equivalent(_ c: SetCommand, _ device: [UInt8]) -> Bool {
+        if device == c.data { return true }
+        guard c.control.unit == ID14.mixerSend(input: 0, output: 0).unit,
+              c.data.count == 2, device.count == 2 else { return false }
+        return DB.decode(c.data) <= DB.minimum + 0.01 && DB.decode(device) <= DB.minimum + 0.01
+    }
+
     /// Die Sends eines Eingangs (6 Befehle: Mix m links = Ausgang 2m, rechts = 2m+1).
     static func sends(forInput i: Int, in s: DeviceState) -> [SetCommand] {
         guard s.inputs.indices.contains(i) else { return [] }   // Zuverlaessigkeit: nie ausserhalb lesen

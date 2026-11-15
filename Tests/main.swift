@@ -180,6 +180,8 @@ do {
 
 MainActor.assumeIsolated { runMeterTests() }
 MainActor.assumeIsolated { runRobustnessTests() }
+MainActor.assumeIsolated { runProfileTests() }
+runDeviceReportTests()
 
 // MARK: 8. Cue-Blend rastet an den Enden ein (Opus)
 do {
@@ -221,6 +223,16 @@ do {
     check("VolumeStep 0 hoch bleibt 0", near(VolumeStep.next(current: 0, up: true, fine: false), 0))
     check("Lautstaerketasten Standard aus, Ziel Monitor",
           !DeviceState().ui.volumeKeys && DeviceState().ui.volumeKeysTarget == 0)
+    check("Peak-Haltezeit Standard 2 s", DeviceState().ui.peakHold == 2 && DeviceState().ui.peakHoldSeconds == 2)
+    var ph = DeviceState(); ph.ui.peakHoldStored = 3
+    check("sanitized: ungueltige Peak-Haltezeit -> Standard", ph.sanitized().ui.peakHoldStored == nil)
+    ph.ui.peakHoldStored = 0
+    check("Peak-Haltezeit 0 = unendlich", ph.sanitized().ui.peakHoldSeconds == .infinity)
+    check("Pegelanzeige Standard RMS", DeviceState().ui.levelReadout == .rms)
+    var lr = DeviceState(); lr.ui.levelReadout = .ppm
+    check("Pegelanzeige PPM bleibt nach sanitized", lr.sanitized().ui.levelReadout == .ppm)
+    lr.ui.levelReadoutStored = 7
+    check("sanitized: ungueltige Pegelanzeige -> RMS", lr.sanitized().ui.levelReadoutStored == nil && lr.sanitized().ui.levelReadout == .rms)
     var vk = DeviceState(); vk.ui.volumeKeysTargetStored = 5
     check("sanitized: Tasten-Ziel 5 -> nil", vk.sanitized().ui.volumeKeysTargetStored == nil)
 }

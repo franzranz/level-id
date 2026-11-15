@@ -180,7 +180,7 @@ final class MediaKeyTap {
         // Entscheidung nur beim Key-Down (ohne Repeat) treffen; Repeat und Key-Up uebernehmen sie
         let take: Bool
         if down && !isRepeat {
-            take = controller.connection == .connected && defaultOutputIsID14()
+            take = controller.connection == .connected && !controller.readOnlyBeta && defaultOutputIsID14()
             intercepting[keyCode] = take
         } else {
             take = intercepting[keyCode] ?? false

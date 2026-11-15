@@ -1,19 +1,31 @@
 # Level iD
 
-A tiny, free menu bar app for the **Audient iD14 MkII** on macOS. It remembers your monitor and headphone volume when you unplug the interface, shows input levels while you set the gain, and uses almost no resources.
+A tiny, free menu bar app for **Audient iD interfaces** (iD14 MkII; iD24 unverified, iD44 in beta) on macOS. It remembers your monitor and headphone volume when you unplug the interface, shows input levels while you set the gain, and uses almost no resources.
 
 > Level iD is an independent project. It is not affiliated with, endorsed by, or supported by Audient. "Audient" and "iD" are trademarks of their respective owners.
 
 <p align="center">
   <a href="https://github.com/franzranz/level-id/releases/latest/download/Level-iD.dmg"><img src="https://img.shields.io/badge/Download-Level%20iD%20for%20Mac-0A84FF?style=for-the-badge&logo=apple&logoColor=white" alt="Download Level iD for Mac" height="44"></a>
   <br>
-  <sub>Free · Apple silicon Mac · macOS 14 or newer · Audient iD14 MkII</sub>
+  <sub>Free · Apple silicon Mac · macOS 14 or newer · Audient iD14 MkII (iD24 unverified, iD44 in beta)</sub>
 </p>
 
 <p align="center">
   <img src="docs/screenshot.png" alt="Level iD panel" width="320">
   <img src="docs/screenshot-settings.png" alt="Level iD settings" width="320">
 </p>
+
+## Supported devices
+
+| Device | Status |
+|---|---|
+| iD14 MkII | ✓ Supported |
+| iD24 | Unverified – read-only (same layout as the iD14; meters and volume display, control is enabled once an owner confirms it) |
+| iD44 | Beta – read-only (meters for all four inputs; no cue mix yet) |
+| iD44 MkII | Beta – read-only (meters for all four inputs; no cue mix yet) |
+| iD4 / iD4 MkII | Not supported – the iD4 has no software-controllable monitor volume |
+
+Own an iD24 or iD44? You can help: Level iD detects the device automatically in read-only mode. Open Settings → "Help verify this device…", follow the five steps (turn the knobs, press the iD button, speak into each input, re-plug) and click "Open GitHub issue" to submit the anonymous report. Nothing is sent automatically.
 
 ## Why
 
@@ -35,7 +47,7 @@ Gain, 48 V phantom power and the Hi-Z instrument switch are analog on the iD14 a
 ## Requirements
 
 - Apple silicon Mac (M1 or newer), macOS 14 Sonoma or newer
-- Audient iD14 MkII (other Audient interfaces are not supported)
+- Audient iD14 MkII, or an iD24 (unverified) or iD44 (beta) (see [Supported devices](#supported-devices))
 
 ## Install (3 steps)
 
@@ -73,7 +85,7 @@ Level iD only sends control commands that Audient's own iD app also sends. It ne
 This is a small hobby project and I would love some help. See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 - **Feedback.** Does it work for you? Is something confusing, missing, or annoying? Open an [issue](../../issues), every report helps.
-- **Other Audient interfaces.** If you own an iD4, iD22, iD24 or iD44, you are welcome to try this and help extend support. The protocol notes are in [docs/PROTOCOL.md](docs/PROTOCOL.md), and the read-only `id14ctl` tool (`./build.sh probe`) shows what a device reports. Other models are not supported yet, and I cannot test them myself.
+- **iD24 and iD44 owners.** These models run read-only for now (iD24 unverified, iD44 beta). Use Settings → "Help verify this device…" and submit the report as a GitHub issue, so control can be enabled. The iD4 cannot be supported (no software volume control). Protocol notes are in [docs/PROTOCOL.md](docs/PROTOCOL.md).
 - **Testing on other setups.** Different Macs, macOS versions, light mode, several displays, sleep and wake, unusual cabling.
 - **Open questions about the iD14 MkII.** Is the +10 dB boost on input 1 controllable over USB? Which routing code switches loopback on? Does a newer firmware behave differently?
 - **Packaging.** Code signing and notarization (needs an Apple Developer account), a Homebrew cask, and translations.

@@ -5,8 +5,10 @@
 
 typedef struct cusb_dev cusb_dev;
 
-// NULL, wenn nicht gefunden. Kein USBDeviceOpen (nicht-exklusiv).
-cusb_dev *cusb_open(uint16_t vid, uint16_t pid);
+// Oeffnet das erste gefundene Geraet mit VID und einer der PIDs (Reihenfolge = Prioritaet).
+// NULL, wenn nicht gefunden. *opened_pid (optional) bekommt die PID des geoeffneten Geraets.
+// Kein USBDeviceOpen (nicht-exklusiv).
+cusb_dev *cusb_open(uint16_t vid, const uint16_t *pids, int npids, uint16_t *opened_pid);
 void cusb_close(cusb_dev *d);
 
 // Control-Transfer. Rueckgabe: uebertragene Bytes (>=0) oder negatives IOReturn-Low-Word.
@@ -16,6 +18,7 @@ int cusb_control(cusb_dev *d, uint8_t bmRequestType, uint8_t bRequest, uint16_t 
 // Hotplug: cb(ctx, 1) bei Anstecken, cb(ctx, 0) bei Abziehen; sofort auch fuer bereits angeschlossenes Geraet.
 // Laeuft auf dem Main-Run-Loop. Rueckgabe 0 = ok.
 typedef void (*cusb_hotplug_cb)(void *ctx, int attached);
-int cusb_watch(uint16_t vid, uint16_t pid, cusb_hotplug_cb cb, void *ctx);
+// Je PID eine eigene Benachrichtigung (gleicher Callback).
+int cusb_watch(uint16_t vid, const uint16_t *pids, int npids, cusb_hotplug_cb cb, void *ctx);
 
 #endif
