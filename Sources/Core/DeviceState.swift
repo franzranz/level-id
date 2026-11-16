@@ -239,6 +239,15 @@ struct UIPreferences: Codable, Equatable {
         get { volumeKeysTargetStored ?? 0 }
         set { volumeKeysTargetStored = newValue }
     }
+    /// Automatische Update-Pruefung (hoechstens 1x pro Woche). Optional fuer Kompatibilitaet
+    /// mit aelteren state.json (fehlender Schluessel = Standard an).
+    var autoUpdateCheckStored: Bool?
+    var autoUpdateCheck: Bool {
+        get { autoUpdateCheckStored ?? true }
+        set { autoUpdateCheckStored = newValue }
+    }
+    /// Zeitpunkt der letzten Update-Pruefung (nil = nie)
+    var lastUpdateCheck: Date?
     /// Im Cue-Mix sichtbare Eingaenge (Nutzerwunsch: Mic 1, Mic 2, DAW 1/2)
     var visibleInputs: [Int] = [ID14.Input.mic1, ID14.Input.mic2, ID14.Input.daw1]
     /// Schrittweite fuer Lautstaerke per Pfeiltaste/Mausrad
@@ -352,6 +361,9 @@ extension DeviceState {
         if let t = s.ui.volumeKeysTargetStored, t > 1 { s.ui.volumeKeysTargetStored = nil }
         if let h = s.ui.peakHoldStored, !UIPreferences.peakHoldChoices.contains(h) { s.ui.peakHoldStored = nil }
 
+        // Zeitstempel in der Zukunft (Uhr verstellt) wuerde die Pruefung sperren -> verwerfen
+        if let d = s.ui.lastUpdateCheck, !(d <= Date().addingTimeInterval(86_400)) { s.ui.lastUpdateCheck = nil }
+
         if let r = s.ui.levelReadoutStored, UIPreferences.LevelReadout(rawValue: r) == nil { s.ui.levelReadoutStored = nil }
 
         var m = s.monitor
@@ -405,7 +417,8 @@ protocol DeviceTransport: AnyObject {
     var openedProductID: UInt16 { get }
     func open() -> Bool
     func close()
-    /// GET (CUR/RANGE/MEM). Rueckgabe nil bei Fehler.
+    /// GET (CUR/RANGE/MEM). Rueckgabe nil bei Fehler. MUSS GET_CUR auf unsichere Controls (ID14.isSafeToRead)
+    /// mit nil beantworten, ohne zu senden.
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]?
     /// SET_CUR. MUSS ID14.isWritable pruefen und andernfalls false liefern, ohne zu senden.
     func set(_ command: SetCommand) -> Bool
@@ -413,5 +426,9 @@ protocol DeviceTransport: AnyObject {
 
 extension DeviceTransport {
     var openedProductID: UInt16 { ID14.productID }
-    func getCur(_ c: ID14.Control) -> [UInt8]? { get(.cur, unit: c.unit, wValue: c.wValue, length: c.length) }
+    /// Unsichere Controls (ID14.isSafeToRead) werden nie angefragt (Firmware haengt), Ergebnis dann nil.
+    func getCur(_ c: ID14.Control) -> [UInt8]? {
+        guard ID14.isSafeToRead(c) else { return nil }
+        return get(.cur, unit: c.unit, wValue: c.wValue, length: c.length)
+    }
 }

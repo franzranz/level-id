@@ -93,7 +93,13 @@ func runDiff() {
     let t = openTransport()
     defer { t.close() }
     var diff = 0
+    var skipped = 0
     for c in plan {
+        guard ID14.isSafeToRead(c.control) else {
+            skipped += 1
+            print("\(c.description)  nicht gelesen (unsicher)")
+            continue
+        }
         let b = t.getCur(c.control)
         if b != c.data {
             diff += 1
@@ -101,7 +107,7 @@ func runDiff() {
             print("\(c.description)  geraet=[\(got)]")
         }
     }
-    print("\(diff) von \(plan.count) abweichend (nur gelesen, nichts gesendet)")
+    print("\(diff) von \(plan.count - skipped) gelesenen abweichend, \(skipped) nicht gelesen (unsicher); nichts gesendet")
 }
 
 func runPlan() {

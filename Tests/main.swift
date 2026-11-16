@@ -182,6 +182,7 @@ MainActor.assumeIsolated { runMeterTests() }
 MainActor.assumeIsolated { runRobustnessTests() }
 MainActor.assumeIsolated { runProfileTests() }
 runDeviceReportTests()
+runUpdateTests()
 
 // MARK: 8. Cue-Blend rastet an den Enden ein (Opus)
 do {

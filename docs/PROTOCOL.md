@@ -71,6 +71,13 @@ Function key mode values equal the CS number of the function: `0x00` Mono, `0x04
 - Clock source 0x29 (internal), 0x2C (optical), selector 0x28. Sample rate via GET 0x29 CS 1.
 - 0x0100 CS 0: optical input mode (4 bytes, 0 = ADAT).
 
+## Reads that hang the firmware
+Two GET requests make the iD14 firmware stop answering until the device is unplugged and replugged (reported by VinneyUK/iDVolume, README "Known limitations"):
+- GET_CUR on unit 0x33 (routing of the physical outputs), any channel.
+- GET_CUR on unit 0x36, CS 0x10 (function key assignment), length 2.
+
+Level iD never reads these values. `ID14.isSafeToRead` blocks the read in the diff push and again in the transport (no USB request is made), and the push always sends these values instead of comparing them.
+
 ## Not available over USB
 - LED meter source and knob step size.
 - Gain, 48 V, Hi-Z state.

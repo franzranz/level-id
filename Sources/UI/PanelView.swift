@@ -5,6 +5,7 @@ import AppKit
 struct PanelView: View {
     @ObservedObject var controller: DeviceController
     @State private var showSettings = false
+    @ObservedObject private var updater = Updater.shared
 
     private var isUnresponsive: Bool { controller.connection == .unresponsive }
 
@@ -48,6 +49,7 @@ struct PanelView: View {
         .frame(width: 320)
         // Nach dem Schliessen der Settings (SwiftUI baut den Inhalt selbst ab) freien Speicher zurueckgeben;
         // ~1 s Verzoegerung, damit die Schliessen-Animation fertig ist
+        .onAppear { updater.checkIfDue() }
         .onChange(of: showSettings) { _, isShown in
             if !isShown { MemoryRelief.relieve(after: 1) }
         }
@@ -90,6 +92,16 @@ struct PanelView: View {
                 }
                 .popover(isPresented: $showSettings, arrowEdge: .bottom) {
                     SettingsView(controller: controller)
+                }
+                if case .available = updater.status {
+                    Button { showSettings = true } label: {
+                        Text("Update available")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    .buttonStyle(.plain)
+                    .padding(.leading, 4)
+                    .help("A new version of Level iD is available. Opens Settings.")
                 }
                 Spacer()
                 FooterIconButton(systemName: "power", size: 18, help: "Quit the app") {

@@ -31,7 +31,7 @@ enum SingleInstance {
             .appendingPathComponent("Library/LaunchAgents/\(agentLabel).plist")
     }
     static var loginEnabled: Bool { FileManager.default.fileExists(atPath: agentURL.path) }
-    private static var domain: String { "gui/\(getuid())" }
+    static var domain: String { "gui/\(getuid())" }
 
     // MARK: Start
 
@@ -94,7 +94,7 @@ enum SingleInstance {
 
     /// launchctl mit Zeitlimit 3 s ausfuehren. Rueckgabe: Exit-Code (-1 bei Fehler/Timeout).
     @discardableResult
-    private static func launchctl(_ args: [String]) -> Int32 {
+    static func launchctl(_ args: [String]) -> Int32 {
         let p = Process()
         p.executableURL = URL(fileURLWithPath: "/bin/launchctl")
         p.arguments = args

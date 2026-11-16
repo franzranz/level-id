@@ -18,7 +18,8 @@ final class RecordingTransport: DeviceTransport {
     }
 
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]? {
-        getResponses["\(unit)-\(wValue)-\(request.rawValue)"]
+        guard request != .cur || ID14.isSafeToRead(unit: unit, wValue: wValue) else { return nil }
+        return getResponses["\(unit)-\(wValue)-\(request.rawValue)"]
     }
 
     /// Prueft wie der echte Transport Whitelist und Laenge, bevor der Befehl "gesendet" wird.

@@ -20,6 +20,7 @@ final class PIDTransport: DeviceTransport, @unchecked Sendable {
     func open() -> Bool { inner.open() }
     func close() { inner.close() }
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]? {
+        guard request != .cur || ID14.isSafeToRead(unit: unit, wValue: wValue) else { return nil }
         lock.lock()
         getCount += 1
         if request == .mem { memGetCount += 1 }

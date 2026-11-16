@@ -67,6 +67,7 @@ final class LoggingTransport: DeviceTransport, @unchecked Sendable {
         lock.lock(); talkbackOn = on; notifyQueue.append([0x07, 0, 0, 0x36]); lock.unlock()
     }
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]? {
+        guard request != .cur || ID14.isSafeToRead(unit: unit, wValue: wValue) else { return nil }
         lock.lock()
         if unit == ID14.Unit.notify.rawValue, !notifyQueue.isEmpty, inner.isOpen {
             let n = notifyQueue.removeFirst(); lock.unlock(); return n
@@ -518,6 +519,36 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         check("Diff: doppeltes Control wird beide Male gesendet (Reihenfolge erhalten), jedes Control einmal gelesen",
               r2.send.count == 2 && r2.send[0].control == skip.control && r2.send[1].control == skip.control
               && r2.unchanged == 1 && reads.values.allSatisfy { $0 == 1 }, "\(r2.send.count) \(reads)")
+        // Unsichere Lese-Befehle (Firmware haengt): 0x33 und 0x36:0x10 werden nie gelesen, aber immer gesendet
+        let routeOut0 = SetCommand(control: ID14.routeOut(channel: 0), data: [0])
+        let fkeys = SetCommand(control: ID14.Monitor.functionKeys, data: [0, 0])
+        let safeRef = plan[0]
+        var unsafeReads: [ID14.Control] = []
+        let r3 = PushPlan.differing([routeOut0, fkeys, safeRef]) { c in
+            unsafeReads.append(c)
+            return c == safeRef.control ? safeRef.data : routeOut0.data   // wuerde "gleich" melden
+        }
+        check("Diff: 0x33 und 0x36:0x10 werden nie gelesen, aber immer gesendet",
+              unsafeReads == [safeRef.control] && r3.send.map { $0.control } == [routeOut0.control, fkeys.control]
+              && r3.unchanged == 1, "\(unsafeReads) \(r3.send.count)")
+        check("isSafeToRead: 0x33 (alle), 0x36:0x10 gesperrt; 0x34, 0x36 andere CS, 0x3C erlaubt",
+              !ID14.isSafeToRead(ID14.routeOut(channel: 0)) && !ID14.isSafeToRead(ID14.routeOut(channel: 5))
+              && !ID14.isSafeToRead(ID14.Control(unit: 0x33, cs: 0x01, ch: 0, length: 1))
+              && !ID14.isSafeToRead(ID14.Monitor.functionKeys)
+              && ID14.isSafeToRead(ID14.routeHost(channel: 0)) && ID14.isSafeToRead(ID14.Monitor.cut)
+              && ID14.isSafeToRead(ID14.Monitor.volume) && ID14.isSafeToRead(ID14.mixerSend(input: 0, output: 0)))
+        let ft = FaultTransport()
+        _ = ft.open()
+        let before = ft.totalRequests
+        let g1 = ft.getCur(ID14.routeOut(channel: 0)), g2 = ft.getCur(ID14.Monitor.functionKeys)
+        let g3 = ft.get(.cur, unit: 0x33, wValue: 0x0600, length: 1)
+        check("Transport: GET auf 0x33 und 0x36:0x10 liefert nil ohne Request",
+              g1 == nil && g2 == nil && g3 == nil && ft.totalRequests == before)
+        check("Transport: GET auf 0x34 wird weiter gelesen", ft.getCur(ID14.routeHost(channel: 0)) != nil && ft.totalRequests == before + 1)
+        let rt = RecordingTransport()
+        rt.getResponses["51-1536-1"] = [1]; rt.getResponses["52-1536-1"] = [2]
+        check("RecordingTransport: 0x33 nil trotz Antwort, 0x34 weiter lesbar",
+              rt.getCur(ID14.routeOut(channel: 0)) == nil && rt.getCur(ID14.routeHost(channel: 0)) == [2])
         check("PushPlan erzeugt keine doppelten Controls", Set(plan.map { $0.control }).count == plan.count)
         // Stumme Mixer-Sends: andere Bytes, aber beide -128 dB -> gleich; hoerbar oder anderes Control -> verschieden
         let silentSend = SetCommand(control: ID14.mixerSend(input: 3, output: 2), data: DB.encode(DB.minimum))
@@ -564,7 +595,9 @@ func mutateJSON(_ v: Any, _ r: inout LCG, _ k: Double = 1) -> Any? {
         hot4.callback?(true)
         spin(2.0, until: { c4.connection == .connected })
         spin(0.8)
-        check("Diff d1: zweites Anstecken ohne Reset sendet fast nichts", nonVolumeSets(t4).count - n1 < 5, "\(nonVolumeSets(t4).count - n1)")
+        // 7 Befehle (0x33 Kanal 0-5, 0x36:0x10) gehen wegen der Lesesperre immer raus
+        let alwaysSent = 7
+        check("Diff d1: zweites Anstecken ohne Reset sendet fast nichts (ausser den nie gelesenen)", nonVolumeSets(t4).count - n1 < 5 + alwaysSent, "\(nonVolumeSets(t4).count - n1)")
         hot4.callback?(false)
         spin(0.1)
         t4.resetDevice()

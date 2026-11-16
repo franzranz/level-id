@@ -43,6 +43,7 @@ final class FaultTransport: DeviceTransport, @unchecked Sendable {
     }
 
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]? {
+        guard request != .cur || ID14.isSafeToRead(unit: unit, wValue: wValue) else { return nil }
         lock.lock(); defer { lock.unlock() }
         requests += 1
         if !opened || getAlwaysNil || failing() { return nil }

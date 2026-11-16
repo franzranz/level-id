@@ -1,9 +1,9 @@
 #!/bin/bash
 # build.sh – baut Level iD nur mit den Xcode Command Line Tools (swiftc + clang), ohne Xcode-Projekt/SwiftPM.
 #   ./build.sh test   -> baut und startet die Offline-Tests (kein Geraetezugriff)
-#   ./build.sh app    -> baut ".build/Level iD.app" (ad-hoc signiert)
+#   ./build.sh app    -> baut ".build/Level iD.app" (signiert mit "Level iD Release", sonst ad hoc)
 #   ./build.sh probe  -> baut das Diagnose-CLI .build/id14ctl (nur lesend)
-#   ./build.sh dist   -> baut .build/Level-iD-<Version>.dmg zum Weitergeben
+#   ./build.sh dist   -> baut .build/Level-iD-<Version>.dmg zum Weitergeben (+ Level-iD.dmg und Level-iD.dmg.sha256)
 #   ./build.sh install -> baut und installiert nach /Applications (fuer Login-Start/Absturz-Neustart)
 set -euo pipefail
 cd "$(dirname "$0")"
@@ -24,15 +24,42 @@ fi
 CORE_PURE=(Sources/Core/Protocol.swift Sources/Core/DeviceState.swift Sources/Core/MixerMath.swift
            Sources/Core/PushPlan.swift Sources/Core/IDStateImporter.swift Sources/Core/StateStore.swift
            Sources/Core/RecordingTransport.swift Sources/Core/VolumeStep.swift
-           Sources/Core/DeviceProfile.swift Sources/Core/DeviceReport.swift)
+           Sources/Core/DeviceProfile.swift Sources/Core/DeviceReport.swift Sources/Core/UpdateCheck.swift)
 
 # Test-Build: zusaetzlich Controller + MeterModel (ohne USBTransport/cusb; Diag liefert Tests/FaultTransport.swift)
 CORE_TEST=("${CORE_PURE[@]}" Sources/Core/MeterModel.swift Sources/Core/MeterScale.swift Sources/Core/TalkbackBridge.swift
            Sources/Core/DeviceController.swift)
 
+# Nur fuer lokale Updater-Tests: LEVELID_UPDATE_TEST=1 ./build.sh app  (erlaubt LEVELID_UPDATE_URL/_TARGET).
+# Nie fuer install/dist.
+TESTFLAGS=()
+if [ -n "${LEVELID_UPDATE_TEST:-}" ]; then
+  TESTFLAGS=(-D LEVELID_UPDATE_TEST)
+  case "${1:-app}" in
+    install|dist) echo "FEHLER: LEVELID_UPDATE_TEST ist nur fuer 'app' erlaubt" >&2; exit 2 ;;
+  esac
+  echo "HINWEIS: Test-Build mit LEVELID_UPDATE_TEST (Update-URL ueberschreibbar) - nicht weitergeben" >&2
+fi
+
 build_cusb() {
   clang -c -O2 -Wall -Wextra -target arm64-apple-macos14.0 -isysroot "$SDK" \
         Sources/CUSB/cusb.c -o "$OUT/cusb.o"
+}
+
+# Signieren: mit dem Zertifikat "Level iD Release" (feste Identitaet, siehe Tools/make-signing-cert.sh),
+# sonst ad hoc. Nur mit fester Identitaet behaelt macOS die Bedienungshilfen-Berechtigung ueber Updates.
+sign_app() {
+  local app=$1 ids
+  # In Variable einlesen statt Pipe: vermeidet SIGPIPE-Fehler unter pipefail
+  ids=$(security find-identity -p codesigning 2>/dev/null || true)
+  if grep -q "Level iD Release" <<<"$ids"; then
+    codesign --force --options runtime --timestamp=none \
+      --entitlements "$ROOT/Resources/LevelID.entitlements" \
+      --sign "Level iD Release" "$app"
+  else
+    echo "WARNUNG: ad hoc signiert: Bedienungshilfen-Recht geht bei jedem Update verloren – einmalig Tools/make-signing-cert.sh ausführen" >&2
+    codesign --force -s - "$app"
+  fi
 }
 
 case "${1:-app}" in
@@ -52,7 +79,7 @@ case "${1:-app}" in
     rm -rf "$APP"; mkdir -p "$APP/Contents/MacOS" "$APP/Contents/Resources"
     # Zuverlaessigkeit: strikte Concurrency-Pruefung, jede Warnung bricht den Build ab
     swiftc "${SWIFTFLAGS[@]}" -strict-concurrency=complete -warnings-as-errors \
-      -parse-as-library -import-objc-header Sources/CUSB/cusb.h \
+      ${TESTFLAGS[@]+"${TESTFLAGS[@]}"} -parse-as-library -import-objc-header Sources/CUSB/cusb.h \
       Sources/Core/*.swift Sources/UI/*.swift "$OUT/cusb.o" \
       -framework IOKit -framework CoreFoundation -framework ServiceManagement \
       -o "$APP/Contents/MacOS/ID14Control"
@@ -60,7 +87,8 @@ case "${1:-app}" in
     cp Resources/AppIcon.icns "$APP/Contents/Resources/AppIcon.icns"
     # Login-Start/Absturz-Neustart: klassischer LaunchAgent in ~/Library/LaunchAgents,
     # wird von der App selbst geschrieben (SingleInstance.swift). Kein SMAppService (Signaturbindung).
-    codesign --force -s - "$APP"
+    sign_app "$APP"
+    codesign --verify "$APP"
     echo "Gebaut: $APP"
     ;;
   install)
@@ -101,7 +129,11 @@ case "${1:-app}" in
     cp Resources/dist/README.txt "$STAGE/README.txt"
     hdiutil create -volname "Level iD $VER" -srcfolder "$STAGE" -ov -format UDZO "$DMG" >/dev/null
     rm -rf "$STAGE"
+    # Release-Assets mit festen Namen fuer die In-App-Aktualisierung (Updater sucht genau diese Namen)
+    cp "$DMG" "$OUT/Level-iD.dmg"
+    (cd "$OUT" && shasum -a 256 Level-iD.dmg > Level-iD.dmg.sha256)
     echo "Paket: $DMG"
+    echo "Release-Assets: $OUT/Level-iD.dmg und $OUT/Level-iD.dmg.sha256"
     ;;
   *) echo "Aufruf: $0 [test|app|probe|install|dist]"; exit 2 ;;
 esac

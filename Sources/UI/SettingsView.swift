@@ -194,6 +194,23 @@ struct SettingsView: View {
                     VolumeKeysPermissionRow()
                 }
             }
+
+            group("Updates") {
+                UpdatesRows(controller: controller)
+            }
+
+            VStack(alignment: .leading, spacing: 8) {
+                Divider()
+                HStack {
+                    Text("Level iD \(Updater.currentVersion)")
+                        .font(.caption)
+                        .foregroundStyle(.tertiary)
+                    Spacer()
+                    Link("GitHub", destination: URL(string: "https://github.com/franzranz/level-id")!)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
         }
         .padding(14)
         .frame(width: 260)
@@ -202,6 +219,76 @@ struct SettingsView: View {
         }
         .sheet(isPresented: $showVerify) {
             DeviceVerifyView(controller: controller)
+        }
+    }
+
+    /// Update-Gruppe: optionale Pruefung, "Check now", Status, Installation bzw. Release-Seite
+    private struct UpdatesRows: View {
+        @ObservedObject var controller: DeviceController
+        @ObservedObject private var updater = Updater.shared
+
+        private var statusText: String? {
+            switch updater.status {
+            case .idle: return nil
+            case .checking: return "Checking…"
+            case .upToDate: return "Up to date"
+            case .available(let v, _): return "Version \(v) is available"
+            case .downloading: return "Downloading…"
+            case .installing: return "Installing…"
+            case .failed(let why): return "Update failed: \(why)"
+            }
+        }
+
+        var body: some View {
+            HStack {
+                Toggle("Check automatically", isOn: Binding(
+                    get: { controller.state.ui.autoUpdateCheck },
+                    set: { on in
+                        controller.setAutoUpdateCheck(on)
+                        if on { updater.checkIfDue() }
+                    }))
+                    .toggleStyle(.checkbox)
+                    .help("Asks GitHub once a day whether a new version exists. Off by default. Nothing but the request itself is sent.")
+                Spacer()
+                Button("Check now") { updater.check() }
+                    .controlSize(.small)
+                    .disabled(updater.isBusy)
+            }
+            if case .available(let v, let url) = updater.status {
+                HStack(spacing: 6) {
+                    Text("Version \(v) is available")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    Link("Notes", destination: url)
+                        .font(.caption)
+                    Spacer()
+                    if updater.installNote == nil {
+                        Button("Install") { updater.install() }
+                            .controlSize(.small)
+                            .help("Downloads the update, checks checksum and signature, replaces the app and restarts it.")
+                    } else {
+                        Button("Open release page") { updater.openReleasePage() }
+                            .controlSize(.small)
+                    }
+                }
+                if let note = updater.installNote {
+                    Text(note)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+            } else {
+                if let t = statusText {
+                    Text(t)
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                        .fixedSize(horizontal: false, vertical: true)
+                }
+                if case .failed = updater.status, updater.releaseURL != nil {
+                    Button("Open release page") { updater.openReleasePage() }
+                        .controlSize(.small)
+                }
+            }
         }
     }
 

@@ -107,6 +107,21 @@ enum ID14 {
     /// Mixe: 0 = Monitore (Ausg. 0/1), 1 = Kopfhoerer (Ausg. 2/3), 2 = Cue (Ausg. 4/5)
     static let mixCount = 3
 
+    // MARK: Sicherheitssperre fuer GET_CUR
+    /// Diese LESE-Befehle lassen die iD14-Firmware haengen (antwortet bis zum Ab-/Anstecken nicht mehr):
+    /// GET auf Unit 0x33 (Routing physische Ausgaenge) und GET auf Unit 0x36 CS 0x10 (Funktionstasten, Laenge 2).
+    /// Quelle: VinneyUK/iDVolume, README "Known limitations". Level iD liest sie nie, sondern sendet die Werte immer.
+    static func isSafeToRead(_ c: Control) -> Bool { isSafeToRead(unit: c.unit, cs: c.cs) }
+
+    /// Dieselbe Regel auf Rohadressen (wValue = cs<<8 | ch), fuer den generischen Transport-GET.
+    static func isSafeToRead(unit: UInt8, wValue: UInt16) -> Bool { isSafeToRead(unit: unit, cs: UInt8(wValue >> 8)) }
+
+    private static func isSafeToRead(unit: UInt8, cs: UInt8) -> Bool {
+        if unit == 0x33 { return false }
+        if unit == 0x36 && cs == 0x10 { return false }
+        return true
+    }
+
     // MARK: Sicherheits-Whitelist fuer SET_CUR
     /// Nur Controls, die iD nachweislich selbst so setzt. Alles andere verweigert der Transport.
     static func isWritable(_ c: Control) -> Bool {

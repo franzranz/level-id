@@ -72,7 +72,8 @@ enum PushPlan {
 
     /// Diff gegen den Geraetezustand: behaelt Befehle, deren Controlwert nicht gelesen werden konnte (nil), vom Plan
     /// abweicht oder deren Control mehrfach im Plan steht (dann gehen alle Vorkommen in Originalreihenfolge raus).
-    /// Jedes Control wird hoechstens einmal gelesen.
+    /// Jedes Control wird hoechstens einmal gelesen. Controls mit !ID14.isSafeToRead werden NIE gelesen (die Firmware
+    /// haengt dann); ihr Befehl geht immer raus, wie bei "nicht lesbar".
     static func differing(_ plan: [SetCommand], read: (ID14.Control) -> [UInt8]?)
         -> (send: [SetCommand], unchanged: Int) {
         var count: [ID14.Control: Int] = [:]
@@ -82,6 +83,7 @@ enum PushPlan {
         var unchanged = 0
         for c in plan {
             let dup = (count[c.control] ?? 0) > 1
+            guard ID14.isSafeToRead(c.control) else { send.append(c); continue }
             var curValue: [UInt8]?
             if let known = cache[c.control] { curValue = known } else {
                 curValue = read(c.control)

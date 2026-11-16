@@ -61,6 +61,12 @@ That's it. Plug in your iD14 and the icon appears in the menu bar. You only have
 
 Please quit Audient's own iD app while you use Level iD. If iD is running, Level iD only watches and changes nothing.
 
+## Updates
+
+Level iD checks for new versions at most once a week (Settings → Updates → "Check automatically", on by default; untick it to turn it off). It never installs anything without your click. You can also click "Check now" at any time. The only thing sent is the request to GitHub's public releases API (with the user agent `LevelID/<version>`). No personal data, no identifiers.
+
+"Install and restart" downloads the new version, verifies its SHA-256 checksum and its code signature (it must carry the same signature as the app you are running), moves the old app to the Trash and restarts. If anything fails, nothing is replaced. Copies that are signed ad hoc, or that are not in the Applications folder, only show a link to the release page.
+
 ## Build from source
 
 You need the Xcode Command Line Tools (Swift 5.10 or newer).

@@ -42,6 +42,9 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             // Standardmaessig aus: der Tap entsteht erst, wenn "Use Mac volume keys" an ist
             // Dev-Build: kein Medientasten-Tap (koennte die installierte App stoeren)
             mediaKeyTap = MediaKeyTap(controller: c, hud: VolumeHUD())
+            // Update-Pruefung nur, wenn der Nutzer sie eingeschaltet hat (einmalig ca. 20 s nach dem Start)
+            Updater.shared.attach(controller: c)
+            Updater.shared.scheduleStartupCheck()
         }
     }
 }

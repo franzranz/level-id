@@ -1299,6 +1299,17 @@ final class DeviceController: ObservableObject {
         store.scheduleSave(state)
     }
 
+    /// Automatische Update-Pruefung ein/aus, App-Einstellung ohne USB.
+    func setAutoUpdateCheck(_ on: Bool) {
+        state.ui.autoUpdateCheck = on
+        store.scheduleSave(state)
+    }
+
+    func setLastUpdateCheck(_ date: Date) {
+        state.ui.lastUpdateCheck = date
+        store.scheduleSave(state)
+    }
+
     /// Peak-Haltezeit der Eingangsmeter (2, 4, 6 s oder 0 = unendlich), App-Einstellung ohne USB.
     func setPeakHold(_ seconds: Double) {
         guard UIPreferences.peakHoldChoices.contains(seconds) else { return }

@@ -29,6 +29,7 @@ final class USBTransport: DeviceTransport {
     }
 
     func get(_ request: ID14.Request, unit: UInt8, wValue: UInt16, length: Int) -> [UInt8]? {
+        guard request != .cur || ID14.isSafeToRead(unit: unit, wValue: wValue) else { return nil }
         guard let d = dev, length > 0, length <= Int(UInt16.max) else { return nil }
         var buf = [UInt8](repeating: 0, count: length)
         let t0 = DispatchTime.now().uptimeNanoseconds
