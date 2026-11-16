@@ -21,6 +21,8 @@ Good to know
 - Please do not use Audient's original "iD" app at the same time. While iD is running,
   Level iD switches to read-only automatically.
 - Keep doing firmware updates with the official iD app.
+- Updates: Level iD checks for a new version at most once a week (Settings -> Updates,
+  can be switched off). Installing always needs your click.
 - Settings: launch at login (including automatic restart after a crash), remember
   volume, volume limit after plugging in, iD button assignment, talkback.
 - For talkback via the Mac microphone, macOS asks for microphone access once.

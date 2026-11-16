@@ -1,5 +1,12 @@
 # Changelog
 
+## 1.3.0
+
+- Built-in updates: Level iD checks GitHub for a new version at most once a week (Settings → Updates → "Check automatically", on by default). "Install" downloads the update, verifies its checksum and code signature, replaces the app and restarts. Nothing is installed without your click.
+- Safer start after plugging in: two device settings that can make the iD14 firmware stop responding when read are no longer read, they are always sent instead.
+- Stable code signature: macOS now keeps the Accessibility permission for the volume keys across updates. After installing 1.3.0, allow it one last time (System Settings → Privacy & Security → Accessibility).
+- Settings: compact Updates row and the version number at the bottom.
+
 ## 1.2.0
 
 - iD24 and iD44 / iD44 MkII are detected automatically and run read-only for now: meters and volume display work, but the app sends nothing to these devices until an owner confirms the protocol. iD24 is marked "unverified", iD44 "beta" (four input meters, no cue mix yet). The iD4 cannot be supported (no software volume control).
