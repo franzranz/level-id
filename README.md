@@ -1,6 +1,6 @@
 # Level iD
 
-A tiny, free menu bar app for **Audient iD interfaces** (iD14 MkII; iD24 unverified, iD44 in beta) on macOS. It remembers your monitor and headphone volume when you unplug the interface, shows input levels while you set the gain, and uses almost no resources.
+A tiny, free menu bar app for **Audient iD interfaces** (iD14 MkII; iD24 unverified, iD44 in beta) on macOS. It shows the microphone levels the iD14 itself can't show, so you can set your gain at a glance. It also remembers your monitor and headphone volume when you unplug the interface, and it uses almost no resources.
 
 > Level iD is an independent project. It is not affiliated with, endorsed by, or supported by Audient. "Audient" and "iD" are trademarks of their respective owners.
 
@@ -27,17 +27,25 @@ A tiny, free menu bar app for **Audient iD interfaces** (iD14 MkII; iD24 unverif
 
 Own an iD24 or iD44? You can help: Level iD detects the device automatically in read-only mode. Open Settings → "Help verify this device…", follow the five steps (turn the knobs, press the iD button, speak into each input, re-plug) and click "Open GitHub issue" to submit the anonymous report. Nothing is sent automatically.
 
+## See your input levels
+
+The iD14's LED ring shows the output level, but not your microphones. To set the gain you have to open a DAW or Audient's mixer. Level iD puts proper input meters in the menu bar:
+
+- **One meter per input**, on an IEC broadcast scale, with peak hold, a clip light, and the highest peak kept on screen until you click it.
+- **RMS or PPM.** Click the value under the meters to switch. RMS shows how loud you are, PPM (EBU Type IIa) is the meter podcast and broadcast levels are usually set by.
+- **Visual cues instead of guesswork.** The target zone is tinted, a green marker shows where your level should sit, and the −6, −12 and −18 dB lines are labelled. Zone and marker adapt when you switch between RMS and PPM. Turn the gain until your voice sits in the zone, done.
+- **Calm and readable.** Built to look like a studio meter, not a toy: no flicker, a smooth start, and every detail explained in a tooltip.
+
 ## Why
 
-The iD14 starts at zero volume after every replug, and Audient's iD app doesn't restore it. iD also needs about 15–30 % CPU and 160 MB of memory while it runs. Level iD fixes both:
+The iD14 starts at zero volume after every replug, and Audient's iD app doesn't restore it. iD also needs about 15–30 % CPU and 160 MB of memory while it runs. Level iD fixes this too:
 
 - **Remembers volume.** Monitor and headphones fade back in after replugging, capped by a "Safe start level".
 - **Tiny.** About 0 % CPU and under 28 MB of memory (Activity Monitor), compared to about 160 MB for iD.
-- **Pro gain meter.** IEC scale, peak and RMS, peak hold and a clip light. Much clearer than iD's meters for setting gain.
 - **Cue mix.** Blend your live mic with computer playback.
 - **iD button.** Mute (monitor, headphones or both), Mono, Alt speakers or Talkback.
 - **Talkback.** Mic 1, Mic 2, both or the Mac mic, headphones only.
-- **Mac volume keys** (optional, off by default). Volume and mute keys control the iD14. Needs the Accessibility permission, which has to be granted again after each update.
+- **Mac volume keys** (optional, off by default). Volume and mute keys control the iD14. Needs the Accessibility permission (kept across updates since 1.3.0).
 - **Speaker pair switch.** Output 1/2 or 3/4.
 
 ## What it cannot do
