@@ -213,7 +213,7 @@ struct SettingsView: View {
             }
         }
         .padding(14)
-        .frame(width: 260)
+        .frame(width: 272)
         .onAppear {
             launchAtLogin = SingleInstance.loginEnabled
         }
@@ -248,6 +248,8 @@ struct SettingsView: View {
                         if on { updater.checkIfDue() }
                     }))
                     .toggleStyle(.checkbox)
+                    .lineLimit(1)
+                    .fixedSize()
                     .help("Asks GitHub once a day whether a new version exists. Off by default. Nothing but the request itself is sent.")
                 Spacer()
                 Button("Check now") { updater.check() }

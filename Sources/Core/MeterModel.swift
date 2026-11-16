@@ -23,6 +23,8 @@ final class MeterModel: ObservableObject {
     private(set) var channelCount: Int
     /// true, solange Messwerte eintreffen (steuert in der UI den 30-fps-Zeichentakt)
     @Published private(set) var live = false
+    /// Nur Vorschau-Modus (README-Bilder): feste Werte, keine Ballistik/Startrampe
+    @Published private(set) var isPreview = false
     /// Anzeige der kleinen Zahl unter "Peak" (App-Einstellung, vom Controller gesetzt)
     @Published var levelReadout: UIPreferences.LevelReadout = .rms
 
@@ -123,6 +125,14 @@ final class MeterModel: ObservableObject {
         }
         if next != mics { mics = next }
         if !live { live = true }
+    }
+
+    /// Nur fuer den Vorschau-Modus: feste Kanalwerte setzen (Standbild, kein Live-Takt).
+    func setPreview(_ channels: [Channel]) {
+        channelCount = Self.clampCount(channels.count)
+        mics = channels
+        isPreview = true
+        live = false
     }
 
     /// Hoechste Spitze und Clip-LED eines Mikrofons zuruecksetzen (mic 0 = Mic 1, 1 = Mic 2).

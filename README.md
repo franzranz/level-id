@@ -11,8 +11,10 @@ A tiny, free menu bar app for **Audient iD interfaces** (iD14 MkII; iD24 unverif
 </p>
 
 <p align="center">
-  <img src="docs/screenshot.png" alt="Level iD panel" width="320">
-  <img src="docs/screenshot-settings.png" alt="Level iD settings" width="320">
+  <picture>
+    <source media="(prefers-color-scheme: dark)" srcset="docs/hero-dark.png">
+    <img src="docs/hero-light.png" alt="Level iD in the menu bar: volume, input meters and settings" width="800">
+  </picture>
 </p>
 
 ## Supported devices

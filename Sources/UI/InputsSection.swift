@@ -8,7 +8,7 @@ struct InputsSection: View {
     @ObservedObject var meters: MeterModel
 
     var body: some View {
-        InputsContent(channels: meters.mics, live: meters.live, preview: false,
+        InputsContent(channels: meters.mics, live: meters.live, preview: meters.isPreview,
                       holdSeconds: meters.peakHoldSeconds,
                       readout: meters.levelReadout,
                       onReset: { meters.resetPeak(mic: $0) },

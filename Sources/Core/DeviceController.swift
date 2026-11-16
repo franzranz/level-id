@@ -827,6 +827,15 @@ final class DeviceController: ObservableObject {
         }
     }
 
+    /// Nur fuer den Vorschau-Modus (README-Bilder): Zustand und Verbindung direkt setzen. Kein USB, kein Speichern;
+    /// der Controller wird dafuer nie gestartet (start() wird nicht aufgerufen).
+    func applyPreview(state newState: DeviceState, connection newConnection: Connection, meters channels: [MeterModel.Channel]) {
+        state = newState
+        connection = newConnection
+        meters.levelReadout = newState.ui.levelReadout
+        meters.setPreview(channels)
+    }
+
     /// Notify-Intervall in ms; die strengste aktive Regel gewinnt.
     nonisolated static func notifyInterval(talkbackKey: Bool, panelVisible: Bool, fading: Bool, burstActive: Bool,
                                            timing: DeviceTiming = .standard) -> Int {

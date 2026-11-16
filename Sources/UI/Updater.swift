@@ -27,6 +27,9 @@ final class Updater: ObservableObject {
     /// Gesetzt = keine Ein-Klick-Installation moeglich (Grund); dann nur Release-Seite anbieten
     @Published private(set) var installNote: String?
 
+    /// Nur fuer den Vorschau-Modus (README-Bilder): Status ohne Netzwerkzugriff setzen.
+    func setPreviewStatus(_ s: Status) { status = s }
+
     private var release: UpdateCheck.Release?
     private weak var controller: DeviceController?
     private var busy: Bool {
